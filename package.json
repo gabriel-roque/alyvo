@@ -1,0 +1,16 @@
+{
+  "name": "alyvo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/web", "packages/contracts"],
+  "scripts": {
+    "dev": "npm run dev --workspace @alyvo/web",
+    "build": "npm run build --workspace @alyvo/web",
+    "lint": "npm run lint --workspace @alyvo/web",
+    "test:web": "npm run test --workspace @alyvo/web",
+    "test:e2e": "npm run test:e2e --workspace @alyvo/web",
+    "typecheck": "npm run typecheck --workspace @alyvo/web"
+  },
+  "engines": {"node": ">=22", "npm": ">=10"}
+}
+
