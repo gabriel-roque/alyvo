@@ -6,7 +6,7 @@ COPY packages/contracts/package.json packages/contracts/package.json
 RUN npm install
 COPY apps/web apps/web
 COPY packages/contracts packages/contracts
-RUN npm run build --workspace @alyvo/web
+RUN NEXT_OUTPUT=standalone npm run build --workspace @alyvo/web
 
 FROM node:22-alpine
 WORKDIR /app
