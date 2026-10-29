@@ -1,0 +1,2 @@
+"""Alyvo asynchronous worker."""
+

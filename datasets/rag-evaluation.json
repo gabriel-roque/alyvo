@@ -1,0 +1,18 @@
+[
+  {
+    "question": "Quais cardiologistas aceitam Vida+ na Unidade Centro?",
+    "expected_terms": ["Marina Lopes", "Lucas Ferreira", "Vida+", "Unidade Centro"],
+    "strategy": "graphrag"
+  },
+  {
+    "question": "Quais documentos devo levar para exames?",
+    "expected_terms": ["documento com foto", "carteirinha"],
+    "strategy": "vector"
+  },
+  {
+    "question": "Qual é a política de estacionamento?",
+    "expected_terms": ["evidência suficiente", "ticket"],
+    "strategy": "low-confidence"
+  }
+]
+
