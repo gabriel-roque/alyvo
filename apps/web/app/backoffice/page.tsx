@@ -1,0 +1,8 @@
+import { ArrowRight, CalendarDays, FileText, MessageSquareText, Users } from "lucide-react";
+import Link from "next/link";
+import { Sidebar } from "@/components/sidebar";
+
+export default function DashboardPage() {
+  return <main className="backoffice-shell"><Sidebar active="Visão geral" /><section className="backoffice-main dashboard-page"><div className="page-heading"><p className="eyebrow">Quinta-feira, 29 de outubro</p><h1>Bom dia, Clara.</h1><p>A operação está em ordem. Há duas pendências que pedem atenção.</p></div><div className="operational-summary"><article><CalendarDays /><span><strong>12</strong> consultas hoje</span></article><article><Users /><span><strong>9</strong> pacientes confirmados</span></article><article><FileText /><span><strong>1</strong> documento em revisão</span></article><article><MessageSquareText /><span><strong>1</strong> ticket aberto</span></article></div><section className="dashboard-focus"><div><p className="eyebrow">Próxima ação</p><h2>Revise a carteirinha enviada por Juliana Silva.</h2><p>O OCR marcou o número da carteirinha com 84% de confiança. A confirmação humana mantém o cadastro confiável.</p><Link className="button button-primary" href="/documentos/revisao">Revisar documento <ArrowRight /></Link></div><ol><li><span>10:30</span><div><strong>Juliana Silva</strong><small>Cardiologia · Dra. Marina Lopes</small></div></li><li><span>11:00</span><div><strong>Fernanda Lima</strong><small>Clínica geral · Dra. Ana Costa</small></div></li><li><span>13:00</span><div><strong>Natalia Rocha</strong><small>Retorno · Dra. Marina Lopes</small></div></li></ol></section></section></main>;
+}
+
