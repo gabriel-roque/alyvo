@@ -1,41 +1,13 @@
 /** Public client-facing types generated from the Alyvo OpenAPI domain. */
-export type Citation = { title: string; source: string; excerpt: string };
+export { createAlyvoClient } from "./client";
+export type { components, paths } from "./schema";
+import type { components } from "./schema";
 
-export type ChatResponse = {
-  id: string;
-  answer: string;
+export type Citation = components["schemas"]["Citation"];
+export type ChatResponse = Omit<components["schemas"]["ChatResponse"], "intent"> & {
   intent: "knowledge" | "schedule" | "cancel_appointment" | "ticket" | "clinical_safety";
-  confidence: number;
-  citations: Citation[];
-  form_request?: { type: string; endpoint?: string; fields?: string[] };
-  confirmation_request?: { type: string; label: string };
-  graph_trace: string[];
 };
-
-export type Doctor = {
-  id: string;
-  name: string;
-  crm: string;
-  specialty: string;
-  unit: string;
-  insurers: string[];
-};
-
-export type Slot = {
-  id: string;
-  doctor: { id: string; name: string; crm: string };
-  unit: { id: string; name: string; address: string };
-  starts_at: string;
-  ends_at: string;
-};
-
-export type DocumentReview = {
-  id: string;
-  kind: string;
-  filename: string;
-  fields: Record<string, string>;
-  confidence: Record<string, number>;
-  confirmed: boolean;
-  status: string;
-};
+export type Doctor = components["schemas"]["DoctorView"];
+export type Slot = components["schemas"]["AvailabilitySlot"];
+export type DocumentReview = components["schemas"]["DocumentView"];
 

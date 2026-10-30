@@ -7,15 +7,18 @@ from .models import (
     Availability,
     Doctor,
     DocumentStatus,
+    Exam,
     Insurer,
     KnowledgeDocument,
+    OutboxEvent,
     Role,
+    Service,
     Specialty,
     Tenant,
     Unit,
     User,
 )
-from .security import cpf_lookup, protect_cpf
+from .security import cpf_lookup, hash_password, protect_cpf
 
 
 def seed_demo(db: Session) -> None:
@@ -44,6 +47,20 @@ def seed_demo(db: Session) -> None:
     db.add_all(doctors)
     db.flush()
 
+    consultation = Service(
+        tenant_id=primary.id,
+        name="Consulta especializada",
+        duration_minutes=30,
+        specialty_id=cardiology.id,
+    )
+    blood_exam = Exam(
+        tenant_id=primary.id,
+        name="Hemograma completo",
+        preparation="Confirmar no pedido médico se há necessidade de jejum.",
+        unit_ids=[center.id, south.id],
+    )
+    db.add_all([consultation, blood_exam])
+
     today = datetime.now(timezone.utc).date()
     for offset in range(1, 8):
         current = today + timedelta(days=offset)
@@ -58,12 +75,19 @@ def seed_demo(db: Session) -> None:
     db.add_all(
         [
             User(tenant_id=primary.id, role=Role.patient, name="Juliana Silva", email="juliana.demo@alyvo.local", cpf_hmac=cpf_lookup(patient_cpf), cpf_encrypted=protect_cpf(patient_cpf)),
-            User(tenant_id=primary.id, role=Role.admin, name="Ana Duarte", email="admin@alyvo.local"),
-            User(tenant_id=primary.id, role=Role.receptionist, name="Clara Lima", email="recepcao@alyvo.local"),
+            User(tenant_id=primary.id, role=Role.admin, name="Ana Duarte", email="admin@alyvo.local", password_hash=hash_password("alyvo-demo")),
+            User(tenant_id=primary.id, role=Role.receptionist, name="Clara Lima", email="recepcao@alyvo.local", password_hash=hash_password("alyvo-demo")),
         ]
     )
-    db.add_all(
-        [
+    for specialty in (cardiology, pediatrics):
+        db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="specialties", aggregate_id=specialty.id, event_type="specialties.upserted", payload={"id": specialty.id, "name": specialty.name}))
+    for unit in (center, south):
+        db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="units", aggregate_id=unit.id, event_type="units.upserted", payload={"id": unit.id, "name": unit.name, "address": unit.address}))
+    for insurer in (vida, amil):
+        db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="insurers", aggregate_id=insurer.id, event_type="insurers.upserted", payload={"id": insurer.id, "name": insurer.name}))
+    for doctor in doctors:
+        db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="doctor", aggregate_id=doctor.id, event_type="doctor.upserted", payload={"id": doctor.id, "name": doctor.name, "crm": doctor.crm, "specialty_id": doctor.specialty_id, "unit_id": doctor.unit_id, "insurer_ids": doctor.insurer_ids}))
+    knowledge_documents = [
             KnowledgeDocument(
                 tenant_id=primary.id,
                 title="Guia de convênios e unidades 2026",
@@ -88,7 +112,26 @@ def seed_demo(db: Session) -> None:
                 status=DocumentStatus.published,
             ),
         ]
-    )
+    db.add_all(knowledge_documents)
+    db.flush()
+    for document in knowledge_documents:
+        chunks = [document.content]
+        document.chunks = chunks
+        db.add(
+            OutboxEvent(
+                tenant_id=document.tenant_id,
+                aggregate_type="knowledge_document",
+                aggregate_id=document.id,
+                event_type="knowledge.published",
+                payload={
+                    "id": document.id,
+                    "title": document.title,
+                    "source": document.source,
+                    "entities": document.entities,
+                    "chunks": chunks,
+                },
+            )
+        )
     db.commit()
 
 

@@ -17,7 +17,11 @@ dependencies = [
   "neo4j>=5.20,<7",
   "boto3>=1.34,<2",
   "langchain-core>=0.3,<2",
-  "langgraph>=0.2,<2"
+  "langgraph>=0.2,<2",
+  "sentence-transformers>=3,<6",
+  "pypdf>=5,<7",
+  "Pillow>=11,<13",
+  "cryptography>=43,<47"
 ]
 
 [project.optional-dependencies]
@@ -27,8 +31,8 @@ dev = [
   "pytest-cov>=5,<8",
   "ruff>=0.5,<1"
 ]
-ocr = ["paddleocr>=2.8,<4", "paddlepaddle>=2.6,<4"]
-eval = ["ragas>=0.2,<1"]
+ocr = ["paddleocr>=2.8,<3", "paddlepaddle>=2.6,<3"]
+eval = ["ragas>=0.4,<0.5", "openai>=1,<3"]
 
 [build-system]
 requires = ["setuptools>=75"]

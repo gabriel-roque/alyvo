@@ -7,7 +7,7 @@ const routes = [
   ["app/chat/page.tsx", "Fontes consultadas"],
   ["app/agendar/page.tsx", "Confirmar agendamento"],
   ["app/documentos/revisao/page.tsx", "Confirmar e salvar"],
-  ["app/backoffice/agenda/page.tsx", "Pendências"],
+  ["app/backoffice/agenda/page.tsx", "atualização em tempo real"],
   ["app/backoffice/conhecimento/page.tsx", "Aprovar e publicar"],
 ];
 

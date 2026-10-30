@@ -1,11 +1,15 @@
 import {
   BookOpen,
+  Activity,
+  Building2,
   CalendarDays,
   FileText,
   LayoutDashboard,
   LogOut,
   MessageSquareText,
   Settings,
+  Stethoscope,
+  Network,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -14,10 +18,19 @@ import { Brand } from "./brand";
 const items = [
   ["/backoffice", "Visão geral", LayoutDashboard],
   ["/backoffice/agenda", "Agenda", CalendarDays],
+  ["/backoffice/agendamentos", "Agendamentos", CalendarDays],
   ["/backoffice/pacientes", "Pacientes", Users],
-  ["/documentos/revisao", "Documentos", FileText],
+  ["/backoffice/documentos", "Documentos", FileText],
   ["/backoffice/tickets", "Tickets", MessageSquareText],
+  ["/backoffice/medicos", "Médicos", Stethoscope],
+  ["/backoffice/especialidades", "Especialidades", Activity],
+  ["/backoffice/convenios", "Convênios", FileText],
+  ["/backoffice/unidades", "Unidades", Building2],
+  ["/backoffice/exames", "Exames", Activity],
+  ["/backoffice/servicos", "Serviços", Settings],
   ["/backoffice/conhecimento", "Conhecimento", BookOpen],
+  ["/backoffice/grafo", "Grafo", Network],
+  ["/backoffice/auditoria", "Auditoria", FileText],
   ["/backoffice/configuracoes", "Configurações", Settings],
 ] as const;
 

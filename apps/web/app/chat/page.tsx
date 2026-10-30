@@ -5,9 +5,9 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import type { Citation } from "@alyvo/contracts";
 import { Brand } from "@/components/brand";
-import { createChatSession, demoDoctors, sendMessage } from "@/lib/api";
+import { createChatSession, sendMessage } from "@/lib/api";
 
-type Message = { role: "user" | "assistant"; content: string; citations?: Citation[]; intent?: string };
+type Message = { role: "user" | "assistant"; content: string; citations?: Citation[]; intent?: string; canTicket?: boolean };
 
 const firstAnswer: Message = {
   role: "assistant",
@@ -31,15 +31,9 @@ export default function ChatPage() {
       const sessionId = session ?? (await createChatSession());
       setSession(sessionId);
       const response = await sendMessage(sessionId, content);
-      setMessages((items) => [...items, { role: "assistant", content: response.answer, citations: response.citations, intent: response.intent }]);
+      setMessages((items) => [...items, { role: "assistant", content: response.answer, citations: response.citations, intent: response.intent, canTicket: response.confirmation_request?.type === "ticket" }]);
     } catch {
-      const doctorSummary = demoDoctors.slice(0, 2).map((doctor) => `${doctor.name}, ${doctor.specialty}, ${doctor.unit}, convênio ${doctor.insurers.join(" e ")}`).join("; ");
-      setMessages((items) => [...items, {
-        role: "assistant",
-        content: content.toLowerCase().includes("agend") ? "Para agendar, escolha um horário real da agenda e confirme o resumo. A autenticação por CPF e código temporário será solicitada antes da reserva." : `Encontrei profissionais na base aprovada: ${doctorSummary}.`,
-        intent: content.toLowerCase().includes("agend") ? "schedule" : "knowledge",
-        citations: [{ title: "Cadastro aprovado de profissionais", source: "Grafo da clínica", excerpt: "Relações entre profissional, especialidade, convênio e unidade." }],
-      }]);
+      setMessages((items) => [...items, { role: "assistant", content: "Não foi possível consultar a Alyvo agora. Tente novamente em instantes." }]);
     } finally {
       setLoading(false);
     }
@@ -50,19 +44,14 @@ export default function ChatPage() {
       <header className="app-header">
         <Brand />
         <nav><Link className="active" href="/chat">Assistente</Link><Link href="/agendar">Agenda</Link><Link href="/backoffice/pacientes">Pacientes</Link><Link href="/backoffice/conhecimento">Conhecimento</Link></nav>
-        <div className="profile"><span className="avatar">AD</span><span><strong>Ana Duarte</strong><small>Clínica Alyvo</small></span><ChevronDown size={17} /></div>
+        <div className="profile"><span className="avatar">PA</span><span><strong>Paciente</strong><small>Clínica Alyvo</small></span><ChevronDown size={17} /></div>
       </header>
       <div className="chat-layout">
         <aside className="conversation-list">
-          <button className="button button-primary full"><Sparkles size={19} /> Nova conversa</button>
+          <button className="button button-primary full" onClick={() => { setMessages([firstAnswer]); setSession(undefined); }}><Sparkles size={19} /> Nova conversa</button>
           <label className="search-label"><span className="sr-only">Buscar conversas</span><input placeholder="Buscar conversas..." /></label>
-          <p className="nav-label">Hoje</p>
-          <button className="conversation active">Cardiologistas com Vida+ <small>10:25</small></button>
-          <button className="conversation">Documentos para consulta <small>09:14</small></button>
-          <button className="conversation">Orientações pré-consulta <small>08:37</small></button>
-          <p className="nav-label">Esta semana</p>
-          <button className="conversation">Unidades e horários <small>Qua</small></button>
-          <button className="conversation">Falar com a recepção <small>Seg</small></button>
+          <p className="nav-label">Sessão atual</p>
+          <button className="conversation active">Nova conversa <small>agora</small></button>
         </aside>
         <section className="chat-main" aria-label="Conversa com a Alyvo">
           <header className="chat-title"><div><h1>Assistente Alyvo <i /> <small>Online</small></h1><p>Respostas baseadas na base aprovada da clínica</p></div><span className="trust-badge"><ShieldCheck size={17} /> Administrativo, sem diagnóstico</span></header>
@@ -73,6 +62,7 @@ export default function ChatPage() {
                 <div className="message-bubble">
                   <p>{message.content}</p>
                   {message.intent === "schedule" && <Link href="/agendar" className="inline-action"><CalendarDays size={18} /> Ver horários disponíveis</Link>}
+                  {message.canTicket && session && <button className="inline-action" onClick={async () => { const response = await sendMessage(session, message.content, { confirmTicket: true }); setMessages((items) => [...items, { role: "assistant", content: response.ticket_id ? "Ticket criado para a recepção." : response.answer }]); }}><ShieldCheck size={18} /> Criar ticket</button>}
                   {message.citations?.length ? <details className="citations" open><summary><BookOpen size={17} /> Fontes consultadas ({message.citations.length})</summary>{message.citations.map((citation, citationIndex) => <div className="citation" key={citation.title}><span>{citationIndex + 1}</span><p><strong>{citation.title}</strong><small>{citation.source} — {citation.excerpt}</small></p></div>)}</details> : null}
                 </div>
               </div>
@@ -85,7 +75,7 @@ export default function ChatPage() {
             </div>}
           </div>
           <form className="composer" onSubmit={submit}>
-            <button type="button" className="icon-button" aria-label="Anexar documento"><Paperclip /></button>
+            <Link href="/documentos/revisao" className="icon-button" aria-label="Anexar documento"><Paperclip /></Link>
             <label className="sr-only" htmlFor="message">Mensagem</label>
             <input id="message" value={text} onChange={(event) => setText(event.target.value)} placeholder="Pergunte sobre especialidades, convênios, unidades ou documentos..." />
             <button className="send-button" aria-label="Enviar mensagem" disabled={loading || !text.trim()}><Send /></button>

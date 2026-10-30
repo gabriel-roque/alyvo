@@ -9,7 +9,8 @@
     "lint": "npm run lint --workspace @alyvo/web",
     "test:web": "npm run test --workspace @alyvo/web",
     "test:e2e": "npm run test:e2e --workspace @alyvo/web",
-    "typecheck": "npm run typecheck --workspace @alyvo/web"
+    "typecheck": "npm run typecheck --workspace @alyvo/web",
+    "generate:contracts": "npm run generate --workspace @alyvo/contracts"
   },
   "engines": {"node": ">=22", "npm": ">=10"}
 }

@@ -1,11 +1,44 @@
 "use client";
 
-import { BookOpen, Check, ChevronDown, FileText, Network, Plus, Save, Stethoscope, Trash2, Upload, UserRound } from "lucide-react";
-import { useState } from "react";
+import { BookOpen, Check, FileText, Network, Trash2, Upload } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/sidebar";
+import { apiFetch, backofficeGet } from "@/lib/api";
+
+type Ingestion = { id: string; title: string; status: string; preview: string; entities: { type: string; name: string }[] };
 
 export default function KnowledgePage() {
-  const [published, setPublished] = useState(false);
-  return <main className="backoffice-shell"><Sidebar active="Conhecimento" /><section className="backoffice-main knowledge-page"><header className="review-heading"><div><p className="eyebrow">Conhecimento</p><h1>{published ? "Conhecimento publicado" : "Revisar ingestão"}</h1><p>{published ? "O GraphRAG da Clínica Alyvo recebeu a versão aprovada." : "Confira o texto e as entidades extraídas antes de publicar no GraphRAG da clínica."}</p></div><ol className="compact-steps"><li className="done"><Check />Upload</li><li className="done"><Check />Extração</li><li className={published ? "done" : "current"}>{published ? <Check /> : "3"}Revisão</li><li className={published ? "done" : ""}>{published ? <Check /> : "4"}Publicação</li></ol></header>{published ? <div className="success-state"><span><Network /></span><h2>Projeção criada com sucesso.</h2><p>O documento Guia de convênios 2026 agora está disponível para respostas fundamentadas.</p><button className="button button-secondary" onClick={() => setPublished(false)}>Reabrir demonstração</button></div> : <><div className="ingestion-grid"><article className="panel document-panel"><header><span>01</span> Documento <small><i /> OCR 96%</small></header><div className="file-meta"><FileText /><div><strong>guia-convenios-2026.pdf</strong><small>12 páginas · 2,4 MB · sintético</small></div></div><div className="document-preview"><div className="pdf-page"><strong>Alyvo</strong><hr /><h2>Guia de Convênios<br />2026</h2><p>Rede credenciada e regras de atendimento</p><h3>1. Visão geral</h3><span /><span /><span /><h3>2. Especialidades e cobertura</h3><span /><span /><span /><h3>3. Unidades de atendimento</h3><span /><span /></div></div><footer><button>‹</button><span>1 / 12</span><button>›</button></footer></article><article className="panel entities-panel"><header><span>02</span> Entidades extraídas <button><Plus /> Adicionar entidade</button></header>{[[UserRound, "Médicos", ["Dra. Marina Lopes", "Dr. Lucas Ferreira"]], [Stethoscope, "Especialidades", ["Cardiologia", "Pediatria"]], [BookOpen, "Convênios", ["Vida+", "Amil"]]].map(([Icon, title, values]) => { const EntityIcon = Icon as typeof UserRound; return <section className="entity-group" key={title as string}><h3><EntityIcon /> {title as string}<small>{(values as string[]).length}</small><ChevronDown /></h3>{(values as string[]).map((value) => <label key={value}><span>{value}</span><input defaultValue={value} /><i /></label>)}</section>})}</article><aside className="panel graph-panel"><header><span>03</span> Pré-visualização do grafo <small><i /> Validado</small></header><div className="graph-canvas"><div className="graph-node doctor"><UserRound /><strong>Dra. Marina</strong></div><div className="graph-node specialty"><Stethoscope /><strong>Cardiologia</strong></div><div className="graph-node unit"><Network /><strong>Unidade Centro</strong></div><div className="graph-node insurer"><FileText /><strong>Vida+</strong></div><svg aria-hidden="true"><line x1="50%" y1="25%" x2="25%" y2="55%" /><line x1="50%" y1="25%" x2="75%" y2="55%" /><line x1="25%" y1="60%" x2="50%" y2="82%" /><line x1="75%" y1="60%" x2="50%" y2="82%" /></svg></div><div className="graph-stats"><span><strong>4</strong> médicos</span><span><strong>3</strong> especialidades</span><span><strong>2</strong> unidades</span></div></aside></div><footer className="sticky-actions"><p><BookOpen /> A publicação atualizará somente o conhecimento da Clínica Alyvo.</p><button className="button button-secondary"><Trash2 /> Rejeitar</button><button className="button button-secondary"><Save /> Salvar rascunho</button><button className="button button-primary" onClick={() => setPublished(true)}><Upload /> Aprovar e publicar</button></footer></>}</section></main>;
-}
+  const [items, setItems] = useState<Ingestion[]>([]);
+  const [selected, setSelected] = useState<Ingestion | null>(null);
+  const [message, setMessage] = useState("");
 
+  const load = useCallback(async () => {
+    const result = await backofficeGet("/ingestions");
+    setItems(result.items);
+    setSelected((current) => result.items.find((item: Ingestion) => item.id === current?.id) ?? result.items[0] ?? null);
+  }, []);
+  useEffect(() => {
+    queueMicrotask(() => void load().catch(() => setMessage("Entre como administrador para gerenciar o conhecimento.")));
+  }, [load]);
+
+  async function upload(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("title", file.name.replace(/\.[^.]+$/, ""));
+    const response = await apiFetch("/backoffice/ingestions/upload", { method: "POST", body });
+    if (!response.ok) { setMessage((await response.json()).detail ?? "Falha no upload"); return; }
+    setMessage("Documento enviado. O worker está extraindo texto e entidades.");
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await load();
+  }
+
+  async function review(action: "approve" | "reject") {
+    if (!selected) return;
+    const response = await apiFetch(`/backoffice/ingestions/${selected.id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: action === "approve" ? JSON.stringify({ entities: selected.entities ?? [], confirmed: true }) : undefined });
+    if (!response.ok) { setMessage((await response.json()).detail ?? "Não foi possível concluir a revisão"); return; }
+    setMessage(action === "approve" ? "Conhecimento aprovado e enviado para projeção no Neo4j." : "Ingestão rejeitada sem alterar o conhecimento publicado.");
+    await load();
+  }
+
+  return <main className="backoffice-shell"><Sidebar active="Conhecimento" /><section className="backoffice-main knowledge-page"><header className="review-heading"><div><p className="eyebrow">Conhecimento institucional</p><h1>Ingestão e publicação</h1><p>Nenhum documento chega ao GraphRAG antes de revisão administrativa.</p></div><label className="button button-primary"><Upload /> Enviar documento<input hidden type="file" accept="application/pdf,text/plain,text/markdown,image/png,image/jpeg" onChange={(event) => event.target.files?.[0] && void upload(event.target.files[0])} /></label></header>{message && <div className="info-box" role="status">{message}</div>}<div className="ingestion-grid"><article className="panel entities-panel"><header><span>01</span> Fila de ingestões</header>{items.map((item) => <button className={selected?.id === item.id ? "selected ingestion-row" : "ingestion-row"} onClick={() => setSelected(item)} key={item.id}><FileText /><span><strong>{item.title}</strong><small>{item.status}</small></span></button>)}</article>{selected && <><article className="panel document-panel"><header><span>02</span> Prévia</header><div className="file-meta"><BookOpen /><div><strong>{selected.title}</strong><small>{selected.status}</small></div></div><p className="knowledge-preview">{selected.preview || "Processamento em andamento…"}</p></article><aside className="panel graph-panel"><header><span>03</span> Publicação</header><div className="graph-canvas"><Network size={64} /><strong>{selected.entities?.length ?? 0} entidades identificadas</strong><p>A projeção cria documento, chunks, embeddings e relacionamentos isolados por clínica.</p></div>{selected.status === "review_required" && <div className="confirmation-actions"><button className="button button-secondary" onClick={() => review("reject")}><Trash2 /> Rejeitar</button><button className="button button-primary" onClick={() => review("approve")}><Check /> Aprovar e publicar</button></div>}</aside></>}</div></section></main>;
+}

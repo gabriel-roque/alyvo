@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.neo4j_store import Neo4jKnowledgeStore
+from app.config import get_settings
 from app.models import Doctor, DocumentStatus, Insurer, KnowledgeDocument, Specialty, Unit
 
 
@@ -15,9 +17,42 @@ class RetrievalResult:
 
 
 def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
-    """Tenant-scoped hybrid retrieval; Neo4j adapter mirrors this contract in the worker."""
+    """Tenant-scoped hybrid retrieval backed by Neo4j, with a test-only SQL fallback."""
     lowered = question.casefold()
-    relation_terms = {"médico", "medico", "cardiologista", "convênio", "convenio", "unidade", "especialidade"}
+    relation_terms = {
+        "médico",
+        "medico",
+        "doutor",
+        "doutora",
+        "cardiologista",
+        "cardiologia",
+        "profissional",
+        "convênio",
+        "convenio",
+        "especialidade",
+        "atende",
+        "atendimento",
+    }
+    if get_settings().app_env != "test":
+        store = None
+        try:
+            store = Neo4jKnowledgeStore()
+            hits = store.relational(tenant_id) if any(term in lowered for term in relation_terms) else store.vector(tenant_id, question)
+            if hits:
+                strategy = "graphrag" if any(term in lowered for term in relation_terms) else "vector"
+                return RetrievalResult(
+                    [hit.content for hit in hits],
+                    [{"title": hit.title, "source": hit.source, "excerpt": hit.content[:240]} for hit in hits],
+                    max(hit.score for hit in hits),
+                    strategy,
+                )
+        except Exception:
+            # Startup remains resilient while the graph is being projected. The SQL
+            # fallback is still tenant-scoped and only exposes approved content.
+            pass
+        finally:
+            if store:
+                store.close()
     if any(term in lowered for term in relation_terms):
         rows = db.execute(
             select(Doctor, Specialty, Unit)

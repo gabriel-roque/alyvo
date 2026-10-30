@@ -1,36 +1,106 @@
 "use client";
 
-import { Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, CreditCard, MapPin, UserRound } from "lucide-react";
+import { CalendarDays, Check, Clock3, MapPin, ShieldCheck, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import type { Slot } from "@alyvo/contracts";
 import { Brand } from "@/components/brand";
+import { accessToken, cancelAppointment, createAppointment, getAvailability, listMyAppointments, registerPatient, startPatientAuth, verifyPatient } from "@/lib/api";
 
-const times = ["09:00", "10:30", "14:00", "16:30"];
+type Appointment = { id: string; doctor_id: string; starts_at: string; status: string; reason: string };
 
 export default function SchedulePage() {
-  const [time, setTime] = useState("10:30");
+  const [cpf, setCpf] = useState("123.456.789-09");
+  const [code, setCode] = useState("");
+  const [email, setEmail] = useState("juliana.demo@alyvo.local");
+  const [name, setName] = useState("");
+  const [registrationToken, setRegistrationToken] = useState("");
+  const [authStep, setAuthStep] = useState<"cpf" | "code" | "register" | "ready">("cpf");
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [selected, setSelected] = useState<Slot | null>(null);
   const [confirmed, setConfirmed] = useState(false);
-  const days = useMemo(() => Array.from({ length: 30 }, (_, index) => index + 1), []);
+  const [message, setMessage] = useState("");
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+
+  async function loadSlots() {
+    const [items, mine] = await Promise.all([getAvailability(), listMyAppointments()]);
+    setSlots(items);
+    setSelected(items[0] ?? null);
+    setAppointments(mine);
+  }
+
+  useEffect(() => {
+    if (accessToken()) {
+      queueMicrotask(() => {
+        setAuthStep("ready");
+        void loadSlots();
+      });
+    }
+  }, []);
+
+  async function sendCode() {
+    setMessage("");
+    await startPatientAuth(cpf, email);
+    setAuthStep("code");
+  }
+
+  async function verify() {
+    setMessage("");
+    const result = await verifyPatient(cpf, code);
+    if (result.status === "registration_required") {
+      setRegistrationToken(result.registration_token);
+      setAuthStep("register");
+      return;
+    }
+    setAuthStep("ready");
+    await loadSlots();
+  }
+
+  async function register() {
+    await registerPatient({ cpf, name, email, registration_token: registrationToken });
+    setAuthStep("ready");
+    await loadSlots();
+  }
+
+  async function cancel(id: string) {
+    if (!window.confirm("Confirma o cancelamento deste agendamento?")) return;
+    await cancelAppointment(id);
+    await loadSlots();
+  }
+
+  async function confirm() {
+    if (!selected) return;
+    setMessage("");
+    try {
+      await createAppointment(selected);
+      setConfirmed(true);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível agendar");
+    }
+  }
 
   return (
     <main>
-      <header className="app-header schedule-header"><Brand /><nav><Link href="/">Início</Link><Link className="active" href="/agendar">Consultas</Link><Link href="/chat">Assistente</Link></nav><div className="profile"><span className="avatar">JS</span><span><strong>Juliana Silva</strong><small>Paciente demo</small></span></div></header>
+      <header className="app-header schedule-header"><Brand /><nav><Link href="/">Início</Link><Link className="active" href="/agendar">Consultas</Link><Link href="/chat">Assistente</Link></nav></header>
       <section className="schedule-page">
-        <div className="page-heading"><p className="eyebrow">Agenda operacional</p><h1>{confirmed ? "Consulta confirmada" : "Agendar consulta"}</h1><p>{confirmed ? "A reserva foi registrada na agenda da Clínica Alyvo." : "Escolha o profissional e um horário disponível. A reserva só acontece após sua confirmação."}</p></div>
-        {confirmed ? (
-          <div className="success-state"><span><Check /></span><h2>Tudo certo, Juliana.</h2><p>Cardiologia com Dra. Marina Lopes em 12 de novembro, às {time}, na Unidade Centro.</p><div className="button-row"><Link href="/chat" className="button button-primary">Voltar ao assistente</Link><button className="button button-secondary" onClick={() => setConfirmed(false)}>Ver resumo</button></div></div>
-        ) : (
-          <>
-            <ol className="stepper"><li className="done"><span><Check /></span><div><strong>Especialidade</strong><small>Cardiologia</small></div></li><li className="done"><span><Check /></span><div><strong>Profissional</strong><small>Dra. Marina Lopes</small></div></li><li className="current"><span>3</span><div><strong>Horário</strong><small>Selecione uma opção</small></div></li><li><span>4</span><div><strong>Confirmar</strong><small>Revise os dados</small></div></li></ol>
-            <div className="schedule-grid">
-              <article className="panel professional-panel"><header>Profissional selecionado</header><div className="selected-doctor"><div className="doctor-monogram">ML</div><div><h2>Dra. Marina Lopes</h2><p>Cardiologia</p><small>CRM 123456 SP</small></div></div><dl><div><dt><MapPin /> Unidade</dt><dd>Unidade Centro<small>Rua das Acácias, 320</small></dd></div><div><dt><CreditCard /> Convênio</dt><dd>Vida+</dd></div><div><dt><Check /> Avaliação</dt><dd>4,9 <small>128 avaliações sintéticas</small></dd></div></dl></article>
-              <article className="panel calendar-panel"><header>Selecione o dia e horário</header><div className="calendar-toolbar"><button aria-label="Mês anterior"><ChevronLeft /></button><strong>Novembro 2026</strong><button aria-label="Próximo mês"><ChevronRight /></button></div><div className="calendar-week"><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span></div><div className="calendar-days">{days.map((day) => <button className={day === 12 ? "selected" : ""} key={day}>{day}</button>)}</div><div className="time-column"><p className="nav-label">Horários disponíveis · quinta, 12</p>{times.map((item) => <button className={time === item ? "selected" : ""} onClick={() => setTime(item)} key={item}><span>{item}</span>{time === item ? <Check /> : <i />} </button>)}</div></article>
-              <aside className="panel summary-panel"><header>Resumo da consulta</header><dl><div><dt><CalendarDays /> Data</dt><dd>Quinta-feira, 12 de novembro</dd></div><div><dt><Clock3 /> Horário</dt><dd>{time}</dd></div><div><dt><Building2 /> Unidade</dt><dd>Unidade Centro<small>Rua das Acácias, 320</small></dd></div><div><dt><UserRound /> Paciente</dt><dd>Juliana Silva<small>Convênio Vida+</small></dd></div></dl><div className="confirmation-note"><Check size={16} /> Você confirma que os dados acima estão corretos?</div><button className="button button-primary full" onClick={() => setConfirmed(true)}>Confirmar agendamento <ChevronRight /></button></aside>
-            </div>
-          </>
-        )}
+        <div className="page-heading"><p className="eyebrow">Agenda operacional</p><h1>{confirmed ? "Consulta confirmada" : "Agendar consulta"}</h1><p>Os horários vêm do PostgreSQL e a reserva só acontece após confirmação.</p></div>
+
+        {authStep !== "ready" && <section className="panel auth-panel">
+          <ShieldCheck /><h2>Confirme sua identidade</h2>
+          {authStep === "cpf" && <><label>CPF<input value={cpf} onChange={(event) => setCpf(event.target.value)} /></label><label>E-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="button button-primary" onClick={sendCode}>Enviar código</button></>}
+          {authStep === "code" && <><label>Código temporário<input value={code} onChange={(event) => setCode(event.target.value)} inputMode="numeric" /></label><button className="button button-primary" onClick={verify}>Confirmar código</button></>}
+          {authStep === "register" && <><p>Primeiro acesso. Complete o cadastro sintético.</p><label>Nome<input value={name} onChange={(event) => setName(event.target.value)} /></label><label>E-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="button button-primary" onClick={register} disabled={!name || !email}>Cadastrar e continuar</button></>}
+          {message && <p role="alert" className="error-text">{message}</p>}
+        </section>}
+
+        {authStep === "ready" && confirmed && selected && <div className="success-state"><span><Check /></span><h2>Consulta registrada.</h2><p>{selected.doctor.name}, em {new Date(selected.starts_at).toLocaleString("pt-BR")}, na {selected.unit.name}.</p><Link href="/chat" className="button button-primary">Voltar ao assistente</Link></div>}
+
+        {authStep === "ready" && !confirmed && <div className="schedule-grid">
+          <article className="panel professional-panel"><header>Horários disponíveis</header>{slots.length === 0 ? <p>Nenhum horário disponível.</p> : <div className="time-column">{slots.map((slot) => <button key={slot.id} className={selected?.id === slot.id ? "selected" : ""} onClick={() => setSelected(slot)}><span><strong>{new Date(slot.starts_at).toLocaleDateString("pt-BR")}</strong> · {new Date(slot.starts_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>{selected?.id === slot.id && <Check />}</button>)}</div>}</article>
+          {selected && <aside className="panel summary-panel"><header>Resumo da consulta</header><dl><div><dt><UserRound /> Profissional</dt><dd>{selected.doctor.name}<small>{selected.doctor.crm}</small></dd></div><div><dt><CalendarDays /> Data</dt><dd>{new Date(selected.starts_at).toLocaleDateString("pt-BR")}</dd></div><div><dt><Clock3 /> Horário</dt><dd>{new Date(selected.starts_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</dd></div><div><dt><MapPin /> Unidade</dt><dd>{selected.unit.name}<small>{selected.unit.address}</small></dd></div></dl><div className="confirmation-note"><Check size={16} /> Confirme para criar a reserva.</div><button className="button button-primary full" onClick={confirm}>Confirmar agendamento</button>{message && <p role="alert" className="error-text">{message}</p>}</aside>}
+        </div>}
+        {authStep === "ready" && appointments.length > 0 && <section className="panel appointment-list"><header>Meus agendamentos</header>{appointments.map((item) => <article key={item.id}><div><strong>{item.reason}</strong><small>{new Date(item.starts_at).toLocaleString("pt-BR")} · {item.status}</small></div>{item.status === "confirmed" && <button className="button button-secondary" onClick={() => void cancel(item.id)}>Cancelar</button>}</article>)}</section>}
       </section>
     </main>
   );
 }
-

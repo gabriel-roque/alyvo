@@ -1,138 +1,55 @@
 # Alyvo
 
-Alyvo é um MVP local-first de assistente administrativo multimodal para
-clínicas, construído como projeto de portfólio. A demonstração combina agenda
-transacional, autenticação por código temporário, OCR revisável, RAG/GraphRAG,
-chat orquestrado e back office — sempre com dados sintéticos e sem diagnóstico,
-prescrição ou triagem clínica.
+Assistente administrativo multimodal para clínicas, feito com dados sintéticos.
+O projeto reúne chat com RAG/GraphRAG, agenda transacional, OCR revisável e um
+backoffice. Não oferece diagnóstico, prescrição ou triagem.
 
-## O que está demonstrável
+## Executar
 
-- home pública responsiva e acessível no design system Editorial Premium;
-- chat administrativo com roteamento, baixa confiança, fontes e SSE;
-- consulta de disponibilidade no banco operacional e agendamento confirmado;
-- prevenção de conflito por validação transacional e constraint GiST no PostgreSQL;
-- OTP de paciente, RBAC de equipe e isolamento obrigatório por `tenant_id`;
-- upload de documento privado, OCR por adapter, edição e confirmação explícita;
-- ingestão institucional com revisão, aprovação, outbox e projeção no Neo4j;
-- agenda, pacientes, tickets, documentos, conhecimento e grafo somente leitura;
-- adapters reais para Ollama, OpenRouter, BGE-M3, PaddleOCR, Neo4j e Celery,
-  com fallbacks determinísticos para testes rápidos.
-
-## Arquitetura
-
-```text
-Next.js ──► FastAPI ──► PostgreSQL (fonte operacional)
-   │            │  └──► LangGraph ─► LangChain/providers ─► Ollama/OpenRouter
-   │            └─────► Redis/Celery ─► PaddleOCR/embeddings/MinIO
-   └── contratos OpenAPI              └► Neo4j (grafo + vetores)
-```
-
-O PostgreSQL mantém pacientes, agenda, documentos, auditoria e outbox. O worker
-consome eventos idempotentes e projeta somente conhecimento aprovado no Neo4j.
-Documentos de pacientes nunca entram no GraphRAG institucional.
-
-## Início rápido sem Docker
-
-Requisitos: Python 3.10+, Node 22+, npm 10+.
+Requisitos: Docker com Compose e cerca de 12 GB livres para imagens e modelos.
 
 ```bash
-cp .env.example .env
-make setup
-make seed
+docker compose up --build
 ```
 
-Em dois terminais:
+Na primeira execução, o Compose baixa o `qwen3:8b` e o BGE-M3. Quando os
+serviços estiverem saudáveis:
 
-```bash
-make api
-make web
-```
-
-Abra `http://localhost:3000`. O modo padrão usa SQLite e providers `mock`, mas
-exercita os mesmos contratos dos providers reais.
+- aplicação: `http://localhost:3000`
+- API e OpenAPI: `http://localhost:8000/docs`
+- e-mails e códigos: `http://localhost:8025`
+- Neo4j: `http://localhost:7474`
+- MinIO: `http://localhost:9001`
 
 Credenciais sintéticas:
 
-- paciente: CPF `123.456.789-09`, código `123456`;
-- administração: `admin@alyvo.local` / `alyvo-demo`;
-- recepção: `recepcao@alyvo.local` / `alyvo-demo`.
+- paciente: CPF `123.456.789-09`, código `123456`
+- administração: `admin@alyvo.local` / `alyvo-demo`
+- recepção: `recepcao@alyvo.local` / `alyvo-demo`
 
-## Ambiente completo com Docker
+## Validar
 
-```bash
-cp .env.example .env
-make infra-up
-```
-
-A API cria o schema local e carrega o seed sintético idempotente na primeira
-inicialização.
-
-Serviços:
-
-| Serviço | URL/porta |
-| --- | --- |
-| Web | `http://localhost:3000` |
-| API / OpenAPI | `http://localhost:8000/docs` |
-| Neo4j Browser | `http://localhost:7474` |
-| MinIO Console | `http://localhost:9001` |
-| Mailpit | `http://localhost:8025` |
-
-Ollama fica em um perfil opcional para evitar download involuntário de modelos:
+Com a infraestrutura em execução:
 
 ```bash
-docker compose -f infra/docker-compose.yml --profile models up -d
-docker compose -f infra/docker-compose.yml exec ollama ollama pull qwen3:8b
+docker compose --profile validation run --rm validate
 ```
 
-Depois, altere `LLM_PROVIDER=ollama`. Para OCR/embedding reais, instale
-`pip install -e '.[ocr]'` e `sentence-transformers`, então use
-`OCR_PROVIDER=paddle` e `EMBEDDING_PROVIDER=bge-m3`.
+A validação cobre testes Python e web, tipos, lint, build, migrações, RLS,
+concorrência de agenda, outbox/Neo4j, OCR real, RAG/GraphRAG com Ragas e os
+fluxos Playwright em desktop e mobile. O resultado fica em
+`reports/validation.json`.
 
-## Validação
+## Componentes
 
-```bash
-make validate
+```text
+Next.js ─► FastAPI ─► LangGraph/LangChain ─► Ollama
+                ├──► PostgreSQL (operações e outbox)
+                ├──► Redis/Celery ─► PaddleOCR + BGE-M3
+                ├──► MinIO (arquivos privados)
+                └──► Neo4j (grafo e vetores)
 ```
 
-O comando executa testes Python, integração, Ruff, testes web, TypeScript,
-ESLint, build de produção, Playwright em desktop/mobile, validação do Compose e
-geração do OpenAPI. O resultado fica em `reports/validation.json`.
-
-Para também subir e verificar a infraestrutura pesada:
-
-```bash
-VALIDATE_WITH_INFRA=1 make validate
-```
-
-Comandos individuais:
-
-```bash
-make test-api
-npm run typecheck
-npm run build
-npm run test:e2e
-make openapi
-docker compose -f infra/docker-compose.yml config --quiet
-```
-
-## Rotas principais
-
-Frontend: `/`, `/chat`, `/agendar`, `/documentos/revisao`, `/backoffice`,
-`/backoffice/agenda` e `/backoffice/conhecimento`.
-
-API: prefixo `/api/v1`; consulte `packages/contracts/openapi.json` ou `/docs`.
-Os contratos TypeScript consumidos pelo frontend ficam em
-`packages/contracts/src/index.ts`.
-
-## Limites conscientes do ambiente
-
-Os testes automatizados usam SQLite e providers determinísticos para não baixar
-modelos de vários gigabytes. A garantia de sobreposição concorrente em produção
-é adicionada por `apps/api/migrations/0001_initial.sql`; a suíte isolada valida o
-mesmo conflito no serviço. A execução real de PaddleOCR, BGE-M3, Ollama, MinIO e
-Neo4j depende dos serviços/modelos locais descritos acima.
-
-Consulte [PLAN.md](PLAN.md), [arquitetura](docs/ARCHITECTURE.md) e o
-[design system](docs/design-system/README.md).
-
+O PostgreSQL é a fonte de verdade. O worker projeta no Neo4j somente dados e
+documentos aprovados. Documentos de pacientes nunca entram no conhecimento
+compartilhado. O frontend usa os contratos gerados em `packages/contracts`.

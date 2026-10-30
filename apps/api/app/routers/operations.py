@@ -6,21 +6,119 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai.providers import LocalObjectStorage, ocr_provider
+from app.ai.providers import object_storage_provider
+from app.config import get_settings
 from app.db import get_db
 from app.models import (
     Appointment,
+    AppointmentHistory,
     AppointmentStatus,
     AuditEvent,
     Availability,
+    AvailabilityBlock,
     Doctor,
     DocumentStatus,
+    Insurer,
     PatientDocument,
+    Specialty,
     Unit,
 )
 from app.security import current_identity
 
 router = APIRouter(tags=["operations"])
+
+
+class DoctorView(BaseModel):
+    id: str
+    name: str
+    crm: str
+    specialty: str
+    unit: str
+    insurers: list[str]
+
+
+class DoctorDirectoryResponse(BaseModel):
+    items: list[DoctorView]
+
+
+class SlotDoctor(BaseModel):
+    id: str
+    name: str
+    crm: str
+
+
+class SlotUnit(BaseModel):
+    id: str
+    name: str
+    address: str
+
+
+class AvailabilitySlot(BaseModel):
+    id: str
+    doctor: SlotDoctor
+    unit: SlotUnit
+    starts_at: datetime
+    ends_at: datetime
+
+
+class AvailabilityResponse(BaseModel):
+    items: list[AvailabilitySlot]
+    source: str
+
+
+class AppointmentView(BaseModel):
+    id: str
+    doctor_id: str
+    unit_id: str
+    starts_at: datetime
+    ends_at: datetime
+    status: str
+    reason: str
+
+
+class DocumentView(BaseModel):
+    id: str
+    kind: str
+    filename: str
+    fields: dict[str, str]
+    confidence: dict[str, float]
+    confirmed: bool
+    status: str
+    created_at: datetime
+    file_url: str | None = None
+
+
+class AppointmentListResponse(BaseModel):
+    items: list[AppointmentView]
+
+
+class DocumentListResponse(BaseModel):
+    items: list[DocumentView]
+
+
+@router.get("/directory/doctors", response_model=DoctorDirectoryResponse)
+def public_doctor_directory(tenant_id: str = "clinic-alyvo", db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(Doctor, Specialty, Unit)
+        .join(Specialty, Doctor.specialty_id == Specialty.id)
+        .join(Unit, Doctor.unit_id == Unit.id)
+        .where(Doctor.tenant_id == tenant_id, Doctor.active.is_(True), Doctor.deleted_at.is_(None))
+        .order_by(Doctor.name)
+    ).all()
+    insurers = {item.id: item.name for item in db.scalars(select(Insurer).where(Insurer.tenant_id == tenant_id))}
+    return {
+        "items": [
+            {
+                "id": doctor.id,
+                "name": doctor.name,
+                "crm": doctor.crm,
+                "specialty": specialty.name,
+                "unit": unit.name,
+                "insurers": [insurers[item] for item in doctor.insurer_ids if item in insurers],
+            }
+            for doctor, specialty, unit in rows
+        ]
+    }
 
 
 class AppointmentCreate(BaseModel):
@@ -47,7 +145,7 @@ def appointment_view(item: Appointment) -> dict:
     }
 
 
-@router.get("/availability")
+@router.get("/availability", response_model=AvailabilityResponse)
 def list_availability(
     day: date | None = None,
     doctor_id: str | None = None,
@@ -72,12 +170,15 @@ def list_availability(
             select(Appointment).where(Appointment.tenant_id == tenant_id, Appointment.status == AppointmentStatus.confirmed)
         )
     }
+    blocks = db.scalars(select(AvailabilityBlock).where(AvailabilityBlock.tenant_id == tenant_id)).all()
     items = []
     for slot, doctor, unit in rows:
         slot_day = slot.starts_at.date()
         if day and slot_day != day:
             continue
         if (slot.doctor_id, slot.starts_at) in appointments:
+            continue
+        if any(block.doctor_id == slot.doctor_id and block.starts_at < slot.ends_at and block.ends_at > slot.starts_at for block in blocks):
             continue
         items.append(
             {
@@ -91,7 +192,7 @@ def list_availability(
     return {"items": items, "source": "postgresql"}
 
 
-@router.post("/appointments", status_code=201)
+@router.post("/appointments", status_code=201, response_model=AppointmentView)
 def create_appointment(
     payload: AppointmentCreate,
     identity: dict = Depends(current_identity),
@@ -144,6 +245,15 @@ def create_appointment(
                 resource_id=appointment.id,
             )
         )
+        db.add(
+            AppointmentHistory(
+                tenant_id=identity["tenant"],
+                appointment_id=appointment.id,
+                actor_id=identity["sub"],
+                from_status=None,
+                to_status=AppointmentStatus.confirmed.value,
+            )
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -152,7 +262,7 @@ def create_appointment(
     return appointment_view(appointment)
 
 
-@router.get("/appointments/me")
+@router.get("/appointments/me", response_model=AppointmentListResponse)
 def my_appointments(identity: dict = Depends(current_identity), db: Session = Depends(get_db)):
     rows = db.scalars(
         select(Appointment).where(
@@ -163,7 +273,7 @@ def my_appointments(identity: dict = Depends(current_identity), db: Session = De
     return {"items": [appointment_view(item) for item in rows]}
 
 
-@router.post("/appointments/{appointment_id}/cancel")
+@router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentView)
 def cancel_appointment(
     appointment_id: str,
     confirmed: bool = True,
@@ -184,6 +294,7 @@ def cancel_appointment(
     item.status = AppointmentStatus.cancelled
     item.cancelled_at = datetime.now(timezone.utc)
     db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action="appointment.cancelled", resource_type="appointment", resource_id=item.id))
+    db.add(AppointmentHistory(tenant_id=identity["tenant"], appointment_id=item.id, actor_id=identity["sub"], from_status=AppointmentStatus.confirmed.value, to_status=AppointmentStatus.cancelled.value))
     db.commit()
     return appointment_view(item)
 
@@ -198,10 +309,11 @@ def document_view(item: PatientDocument) -> dict:
         "confirmed": item.confirmed,
         "status": item.status.value,
         "created_at": item.created_at,
+        "file_url": object_storage_provider().presigned_get(item.storage_key) if item.storage_key else None,
     }
 
 
-@router.post("/patient/documents", status_code=202)
+@router.post("/patient/documents", status_code=202, response_model=DocumentView)
 async def upload_patient_document(
     file: UploadFile = File(...),
     kind: str = Form("insurance_card"),
@@ -211,52 +323,71 @@ async def upload_patient_document(
     if identity["role"] != "patient":
         raise HTTPException(403, "Apenas pacientes podem enviar documentos")
     content = await file.read()
-    if not content or len(content) > 10 * 1024 * 1024:
+    if not content or len(content) > get_settings().upload_max_bytes:
         raise HTTPException(422, "Arquivo vazio ou maior que 10 MB")
-    allowed = {"image/png", "image/jpeg", "application/pdf", "application/octet-stream"}
+    allowed = {"image/png", "image/jpeg", "application/pdf"}
     if file.content_type not in allowed:
         raise HTTPException(415, "Formato não suportado")
     provisional_key = f"{identity['tenant']}/patients/{identity['sub']}/{file.filename}"
-    storage_key = LocalObjectStorage().put_private(provisional_key, content, file.content_type or "application/octet-stream")
-    result = ocr_provider().extract(content, file.filename or "documento")
+    signatures = {
+        "image/png": content.startswith(b"\x89PNG"),
+        "image/jpeg": content.startswith(b"\xff\xd8"),
+        "application/pdf": content.startswith(b"%PDF"),
+    }
+    if not signatures.get(file.content_type, False):
+        raise HTTPException(415, "Conteúdo do arquivo não corresponde ao formato informado")
+    storage_key = object_storage_provider().put_private(provisional_key, content, file.content_type or "application/octet-stream")
     item = PatientDocument(
         tenant_id=identity["tenant"],
         patient_id=identity["sub"],
         kind=kind,
         filename=file.filename or "documento",
         storage_key=storage_key,
-        raw_ocr=result.raw_text,
-        fields=result.fields,
-        confidence=result.confidence,
+        raw_ocr="",
+        fields={},
+        confidence={},
+        status=DocumentStatus.uploaded,
     )
     db.add(item)
     db.commit()
     db.refresh(item)
+    if get_settings().app_env == "test":
+        from worker.tasks import process_patient_document
+
+        process_patient_document(item.id, identity["tenant"])
+        db.refresh(item)
+    else:
+        from worker.celery_app import celery_app
+
+        celery_app.send_task(
+            "worker.tasks.process_patient_document",
+            args=[item.id, identity["tenant"]],
+        )
     return document_view(item)
 
 
-@router.get("/patient/documents")
+@router.get("/patient/documents", response_model=DocumentListResponse)
 def list_patient_documents(identity: dict = Depends(current_identity), db: Session = Depends(get_db)):
-    items = db.scalars(select(PatientDocument).where(PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"])).all()
+    items = db.scalars(select(PatientDocument).where(PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"], PatientDocument.deleted_at.is_(None))).all()
     return {"items": [document_view(item) for item in items]}
 
 
-@router.get("/patient/documents/{document_id}")
+@router.get("/patient/documents/{document_id}", response_model=DocumentView)
 def get_patient_document(document_id: str, identity: dict = Depends(current_identity), db: Session = Depends(get_db)):
-    item = db.scalar(select(PatientDocument).where(PatientDocument.id == document_id, PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"]))
+    item = db.scalar(select(PatientDocument).where(PatientDocument.id == document_id, PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"], PatientDocument.deleted_at.is_(None)))
     if not item:
         raise HTTPException(404, "Documento não encontrado")
     return document_view(item)
 
 
-@router.post("/patient/documents/{document_id}/confirm")
+@router.post("/patient/documents/{document_id}/confirm", response_model=DocumentView)
 def confirm_patient_document(
     document_id: str,
     payload: DocumentConfirm,
     identity: dict = Depends(current_identity),
     db: Session = Depends(get_db),
 ):
-    item = db.scalar(select(PatientDocument).where(PatientDocument.id == document_id, PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"]))
+    item = db.scalar(select(PatientDocument).where(PatientDocument.id == document_id, PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"], PatientDocument.deleted_at.is_(None)))
     if not item:
         raise HTTPException(404, "Documento não encontrado")
     if not payload.confirmed:
@@ -264,6 +395,8 @@ def confirm_patient_document(
     item.fields = payload.fields
     item.confirmed = True
     item.status = DocumentStatus.approved
+    item.confirmed_by = identity["sub"]
+    item.confirmed_at = datetime.now(timezone.utc)
     db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action="patient_document.confirmed", resource_type="patient_document", resource_id=item.id, metadata_json={"fields": sorted(payload.fields)}))
     db.commit()
     return document_view(item)
