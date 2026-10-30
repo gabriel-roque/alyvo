@@ -33,8 +33,10 @@ def test_doctor_location_question_uses_relational_retrieval(client):
     assert "Marina Lopes" in evidence
     assert body["graph_trace"] == [
         "classify_intent",
-        "route:retrieval",
+        "extract_entities",
+        "route_intent",
         "retrieve:graphrag",
+        "execute_tools",
         "compose_response",
     ]
 

@@ -53,3 +53,5 @@ Next.js ─► FastAPI ─► LangGraph/LangChain ─► Ollama
 O PostgreSQL é a fonte de verdade. O worker projeta no Neo4j somente dados e
 documentos aprovados. Documentos de pacientes nunca entram no conhecimento
 compartilhado. O frontend usa os contratos gerados em `packages/contracts`.
+
+Detalhes: [arquitetura](docs/ARCHITECTURE.md) e [roteiro de demonstração](docs/DEMO.md).

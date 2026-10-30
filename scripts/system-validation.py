@@ -31,7 +31,7 @@ def main() -> None:
         insurers = assert_ok(client.get(f"{API}/backoffice/catalog/insurers", headers=admin))["items"]
         marker = uuid.uuid4().hex[:8]
         doctor_name = f"Dra. E2E {marker}"
-        assert_ok(client.post(f"{API}/backoffice/doctors", headers=admin, json={"name": doctor_name, "crm": f"CRM {marker}", "specialty_id": specialties[0]["id"], "unit_id": units[0]["id"], "insurer_ids": [insurers[0]["id"]]}))
+        created_doctor = assert_ok(client.post(f"{API}/backoffice/doctors", headers=admin, json={"name": doctor_name, "crm": f"CRM {marker}", "specialty_id": specialties[0]["id"], "unit_id": units[0]["id"], "insurer_ids": [insurers[0]["id"]]}))
 
         graph_evidence = ""
         for _ in range(30):
@@ -42,6 +42,16 @@ def main() -> None:
                 break
             time.sleep(1)
         assert doctor_name in graph_evidence, "Outbox não projetou o novo médico no GraphRAG"
+
+        assert client.delete(f"{API}/backoffice/doctors/{created_doctor['id']}", headers=admin).status_code == 204
+        for _ in range(30):
+            with GraphDatabase.driver(os.environ["NEO4J_URI"], auth=(os.environ["NEO4J_USER"], os.environ["NEO4J_PASSWORD"])) as driver:
+                with driver.session() as graph:
+                    remaining = graph.run("MATCH (d:Doctor {id: $id, tenant_id: $tenant}) RETURN count(d) AS count", id=created_doctor["id"], tenant=TENANT).single()["count"]
+            if remaining == 0:
+                break
+            time.sleep(1)
+        assert remaining == 0, "Deleção não foi projetada no Neo4j"
 
         rejected_marker = f"SEGREDO-REJEITADO-{marker}"
         ingestion = assert_ok(client.post(f"{API}/backoffice/ingestions", headers=admin, json={"title": "Documento rejeitado E2E", "content": rejected_marker}))
@@ -65,7 +75,13 @@ def main() -> None:
                     tenant=TENANT,
                     marker=rejected_marker,
                 ).single()["matches"]
+                labels = set(graph.run("MATCH (n {tenant_id: $tenant}) UNWIND labels(n) AS label RETURN DISTINCT label", tenant=TENANT).value())
+                relationships = set(graph.run("MATCH (a {tenant_id: $tenant})-[r]->(b {tenant_id: $tenant}) RETURN DISTINCT type(r)", tenant=TENANT).value())
+                vector_indexes = graph.run("SHOW VECTOR INDEXES YIELD name WHERE name = 'knowledge_chunk_embedding' RETURN count(*) AS count").single()["count"]
         assert matches == 0, "Ingestão rejeitada alterou o GraphRAG"
+        assert {"Clinic", "Unit", "Doctor", "Specialty", "Insurer", "Exam", "Service", "Document", "Chunk"} <= labels
+        assert {"WORKS_AT", "HAS_SPECIALTY", "ACCEPTS", "PERFORMS", "OFFERS", "BELONGS_TO", "HAS_DOCUMENT", "HAS_CHUNK", "MENTIONS", "SUPPORTED_BY"} <= relationships
+        assert vector_indexes == 1
 
         assert_ok(client.post(f"{API}/auth/patient/start", json={"tenant_id": TENANT, "cpf": "123.456.789-09"}))
         patient = assert_ok(client.post(f"{API}/auth/patient/verify", json={"tenant_id": TENANT, "cpf": "123.456.789-09", "code": "123456"}))

@@ -354,8 +354,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Attachment Handoff */
-        post: operations["attachment_handoff_api_v1_chat_sessions__session_id__attachments_post"];
+        /** Upload Attachment */
+        post: operations["upload_attachment_api_v1_chat_sessions__session_id__attachments_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -674,6 +674,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backoffice/clinic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Clinic */
+        get: operations["clinic_api_v1_backoffice_clinic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Clinic */
+        patch: operations["update_clinic_api_v1_backoffice_clinic_patch"];
+        trace?: never;
+    };
+    "/api/v1/backoffice/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Staff Users */
+        get: operations["staff_users_api_v1_backoffice_users_get"];
+        put?: never;
+        /** Create Staff User */
+        post: operations["create_staff_user_api_v1_backoffice_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Staff User */
+        delete: operations["delete_staff_user_api_v1_backoffice_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Staff User */
+        patch: operations["update_staff_user_api_v1_backoffice_users__user_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -788,6 +842,16 @@ export interface components {
              */
             ends_at: string;
         };
+        /** Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post */
+        Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post: {
+            /** File */
+            file: string;
+            /**
+             * Kind
+             * @default insurance_card
+             */
+            kind: string;
+        };
         /** Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post */
         Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post: {
             /** File */
@@ -819,6 +883,18 @@ export interface components {
              * @default
              */
             address: string;
+            /**
+             * Duration Minutes
+             * @default 30
+             */
+            duration_minutes: number;
+            /** Specialty Id */
+            specialty_id?: string | null;
+            /**
+             * Unit Ids
+             * @default []
+             */
+            unit_ids: string[];
         };
         /** CatalogUpdate */
         CatalogUpdate: {
@@ -830,6 +906,10 @@ export interface components {
             address?: string | null;
             /** Duration Minutes */
             duration_minutes?: number | null;
+            /** Specialty Id */
+            specialty_id?: string | null;
+            /** Unit Ids */
+            unit_ids?: string[] | null;
         };
         /** ChatResponse */
         ChatResponse: {
@@ -868,6 +948,21 @@ export interface components {
             source: string;
             /** Excerpt */
             excerpt: string;
+        };
+        /** ClinicUpdate */
+        ClinicUpdate: {
+            /** Name */
+            name: string;
+            /**
+             * Timezone
+             * @default America/Sao_Paulo
+             */
+            timezone: string;
+            /**
+             * Cancellation Notice Hours
+             * @default 0
+             */
+            cancellation_notice_hours: number;
         };
         /** DoctorCreate */
         DoctorCreate: {
@@ -1056,6 +1151,11 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
+        /**
+         * Role
+         * @enum {string}
+         */
+        Role: "admin" | "receptionist" | "patient";
         /** SessionCreate */
         SessionCreate: {
             /**
@@ -1093,6 +1193,26 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** StaffUserCreate */
+        StaffUserCreate: {
+            /** Name */
+            name: string;
+            /** Email */
+            email: string;
+            role: components["schemas"]["Role"];
+            /** Password */
+            password: string;
+        };
+        /** StaffUserUpdate */
+        StaffUserUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Email */
+            email?: string | null;
+            role?: components["schemas"]["Role"] | null;
+            /** Password */
+            password?: string | null;
         };
         /** TicketUpdate */
         TicketUpdate: {
@@ -1414,6 +1534,7 @@ export interface operations {
                 day?: string | null;
                 doctor_id?: string | null;
                 specialty_id?: string | null;
+                unit_id?: string | null;
                 tenant_id?: string;
             };
             header?: never;
@@ -1784,16 +1905,22 @@ export interface operations {
             };
         };
     };
-    attachment_handoff_api_v1_chat_sessions__session_id__attachments_post: {
+    upload_attachment_api_v1_chat_sessions__session_id__attachments_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path: {
                 session_id: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -1848,7 +1975,11 @@ export interface operations {
     };
     agenda_api_v1_backoffice_agenda_get: {
         parameters: {
-            query?: never;
+            query?: {
+                day?: string | null;
+                doctor_id?: string | null;
+                unit_id?: string | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -2551,7 +2682,9 @@ export interface operations {
     };
     graph_api_v1_backoffice_graph_get: {
         parameters: {
-            query?: never;
+            query?: {
+                entity_type?: string | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -2590,6 +2723,206 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clinic_api_v1_backoffice_clinic_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_clinic_api_v1_backoffice_clinic_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    staff_users_api_v1_backoffice_users_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_staff_user_api_v1_backoffice_users_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffUserCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_staff_user_api_v1_backoffice_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_staff_user_api_v1_backoffice_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffUserUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

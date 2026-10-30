@@ -30,13 +30,47 @@ export async function createChatSession(): Promise<string> {
   return (await response.json()).id;
 }
 
-export async function sendMessage(sessionId: string, content: string, options: { confirmTicket?: boolean } = {}): Promise<ChatResponse> {
+export async function sendMessage(sessionId: string, content: string, options: { confirmTicket?: boolean; confirmed?: boolean; action?: Record<string, unknown> } = {}): Promise<ChatResponse> {
   const response = await apiFetch(`/chat/sessions/${sessionId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, confirm_ticket: options.confirmTicket ?? false }),
+    body: JSON.stringify({ content, confirm_ticket: options.confirmTicket ?? false, confirmed: options.confirmed ?? false, action: options.action }),
   });
   if (!response.ok) throw new Error("A assistente está temporariamente indisponível");
+  return response.json();
+}
+
+export async function streamChatEvents(sessionId: string, onEvent: (event: string, payload: Record<string, unknown>) => void) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await apiFetch(`/chat/sessions/${sessionId}/events`, { headers: { Accept: "text/event-stream" }, signal: controller.signal });
+    if (!response.ok || !response.body) throw new Error("Streaming indisponível");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer = (buffer + decoder.decode(value, { stream: !done })).replaceAll("\r\n", "\n");
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+      for (const block of blocks) {
+        const event = block.match(/^event:\s*(.+)$/m)?.[1] ?? "message";
+        const data = block.match(/^data:\s*(.+)$/m)?.[1];
+        if (data) onEvent(event, JSON.parse(data));
+        if (event === "completed" || event === "error") { await reader.cancel(); return; }
+      }
+      if (done) break;
+    }
+  } finally { window.clearTimeout(timeout); }
+}
+
+export async function uploadChatAttachment(sessionId: string, file: File, kind: string) {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("kind", kind);
+  const response = await apiFetch(`/chat/sessions/${sessionId}/attachments`, { method: "POST", body });
+  if (!response.ok) throw new Error((await response.json()).detail ?? "Falha no upload");
   return response.json();
 }
 

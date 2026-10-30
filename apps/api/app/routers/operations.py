@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.ai.providers import object_storage_provider
 from app.config import get_settings
 from app.db import get_db
+from app.document_drafts import delete_draft, get_draft
 from app.models import (
     Appointment,
     AppointmentHistory,
@@ -21,8 +22,10 @@ from app.models import (
     Insurer,
     PatientDocument,
     Specialty,
+    Tenant,
     Unit,
 )
+from app.observability import correlation_id, record
 from app.security import current_identity
 
 router = APIRouter(tags=["operations"])
@@ -150,6 +153,7 @@ def list_availability(
     day: date | None = None,
     doctor_id: str | None = None,
     specialty_id: str | None = None,
+    unit_id: str | None = None,
     tenant_id: str = "clinic-alyvo",
     db: Session = Depends(get_db),
 ):
@@ -163,6 +167,8 @@ def list_availability(
         query = query.where(Availability.doctor_id == doctor_id)
     if specialty_id:
         query = query.where(Doctor.specialty_id == specialty_id)
+    if unit_id:
+        query = query.where(Availability.unit_id == unit_id)
     rows = db.execute(query.order_by(Availability.starts_at)).all()
     appointments = {
         (item.doctor_id, item.starts_at)
@@ -291,6 +297,11 @@ def cancel_appointment(
     )
     if not item:
         raise HTTPException(404, "Agendamento não encontrado")
+    policy = db.get(Tenant, identity["tenant"])
+    notice = policy.cancellation_notice_hours if policy else 0
+    starts_at = item.starts_at if item.starts_at.tzinfo else item.starts_at.replace(tzinfo=timezone.utc)
+    if notice > 0 and datetime.now(timezone.utc) > starts_at - timedelta(hours=notice):
+        raise HTTPException(409, f"Cancelamentos exigem antecedência de {notice} horas")
     item.status = AppointmentStatus.cancelled
     item.cancelled_at = datetime.now(timezone.utc)
     db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action="appointment.cancelled", resource_type="appointment", resource_id=item.id))
@@ -299,13 +310,14 @@ def cancel_appointment(
     return appointment_view(item)
 
 
-def document_view(item: PatientDocument) -> dict:
+def document_view(item: PatientDocument, include_draft: bool = False) -> dict:
+    draft = get_draft(item.tenant_id, item.patient_id, item.id) if include_draft and not item.confirmed else {}
     return {
         "id": item.id,
         "kind": item.kind,
         "filename": item.filename,
-        "fields": item.fields,
-        "confidence": item.confidence,
+        "fields": draft.get("fields", item.fields),
+        "confidence": draft.get("confidence", item.confidence),
         "confirmed": item.confirmed,
         "status": item.status.value,
         "created_at": item.created_at,
@@ -354,22 +366,23 @@ async def upload_patient_document(
     if get_settings().app_env == "test":
         from worker.tasks import process_patient_document
 
-        process_patient_document(item.id, identity["tenant"])
+        process_patient_document(item.id, identity["tenant"], correlation_id())
         db.refresh(item)
     else:
         from worker.celery_app import celery_app
 
         celery_app.send_task(
             "worker.tasks.process_patient_document",
-            args=[item.id, identity["tenant"]],
+            args=[item.id, identity["tenant"], correlation_id()],
         )
-    return document_view(item)
+    record("patient_document.uploaded", document_id=item.id, kind=kind)
+    return document_view(item, include_draft=True)
 
 
 @router.get("/patient/documents", response_model=DocumentListResponse)
 def list_patient_documents(identity: dict = Depends(current_identity), db: Session = Depends(get_db)):
     items = db.scalars(select(PatientDocument).where(PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"], PatientDocument.deleted_at.is_(None))).all()
-    return {"items": [document_view(item) for item in items]}
+    return {"items": [document_view(item, include_draft=True) for item in items]}
 
 
 @router.get("/patient/documents/{document_id}", response_model=DocumentView)
@@ -377,7 +390,7 @@ def get_patient_document(document_id: str, identity: dict = Depends(current_iden
     item = db.scalar(select(PatientDocument).where(PatientDocument.id == document_id, PatientDocument.tenant_id == identity["tenant"], PatientDocument.patient_id == identity["sub"], PatientDocument.deleted_at.is_(None)))
     if not item:
         raise HTTPException(404, "Documento não encontrado")
-    return document_view(item)
+    return document_view(item, include_draft=True)
 
 
 @router.post("/patient/documents/{document_id}/confirm", response_model=DocumentView)
@@ -392,12 +405,17 @@ def confirm_patient_document(
         raise HTTPException(404, "Documento não encontrado")
     if not payload.confirmed:
         raise HTTPException(422, "Confirmação explícita é obrigatória")
+    draft = get_draft(identity["tenant"], identity["sub"], item.id)
     item.fields = payload.fields
+    item.confidence = draft.get("confidence", {})
+    item.raw_ocr = draft.get("raw_ocr", "")
     item.confirmed = True
     item.status = DocumentStatus.approved
     item.confirmed_by = identity["sub"]
     item.confirmed_at = datetime.now(timezone.utc)
     db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action="patient_document.confirmed", resource_type="patient_document", resource_id=item.id, metadata_json={"fields": sorted(payload.fields)}))
     db.commit()
+    delete_draft(identity["tenant"], identity["sub"], item.id)
+    record("patient_document.confirmed", document_id=item.id, field_names=sorted(payload.fields))
     return document_view(item)
 

@@ -1,7 +1,8 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -9,9 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.ai.workflow import run_workflow
 from app.db import get_db
-from app.models import ChatMessage, ChatSession, Ticket
-from app.routers.operations import AppointmentCreate, cancel_appointment, create_appointment
-from app.security import optional_identity
+from app.models import ChatMessage, ChatSession
+from app.observability import correlation_id
+from app.routers.operations import upload_patient_document
+from app.security import current_identity, optional_identity
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -82,33 +84,18 @@ def post_message(
         db,
         {
             "tenant_id": session.tenant_id,
+            "session_id": session.id,
             "patient_id": session.patient_id,
+            "identity": identity,
             "message": payload.content,
+            "pending_action": payload.action,
+            "confirmed": payload.confirmed,
+            "confirm_ticket": payload.confirm_ticket,
+            "attachments": session.state.get("attachments", []),
+            "history_summary": session.state.get("history_summary", ""),
+            "correlation_id": correlation_id(),
         },
     )
-    ticket = None
-    tool_result = None
-    if payload.action and identity and payload.confirmed:
-        action_type = payload.action.get("type")
-        if action_type == "schedule":
-            created = create_appointment(
-                AppointmentCreate(
-                    doctor_id=payload.action["doctor_id"],
-                    starts_at=payload.action["starts_at"],
-                    reason=payload.action.get("reason", "Consulta"),
-                    confirmed=True,
-                ),
-                identity,
-                db,
-            )
-            tool_result = {"type": "appointment_created", "appointment": created}
-        elif action_type == "cancel":
-            cancelled = cancel_appointment(payload.action["appointment_id"], True, identity, db)
-            tool_result = {"type": "appointment_cancelled", "appointment": cancelled}
-    if payload.confirm_ticket and (result["intent"] == "ticket" or result["confidence"] < 0.6):
-        ticket = Ticket(tenant_id=session.tenant_id, patient_id=session.patient_id, subject="Solicitação pelo chat", message=payload.content)
-        db.add(ticket)
-        db.flush()
     assistant = ChatMessage(
         tenant_id=session.tenant_id,
         session_id=session.id,
@@ -121,12 +108,12 @@ def post_message(
             "graph_trace": result["graph_trace"],
             "form_request": result.get("form_request"),
             "confirmation_request": result.get("confirmation_request"),
-            "tool_result": tool_result,
-            "ticket_id": ticket.id if ticket else None,
+            "tool_result": jsonable_encoder(result.get("tool_result")),
+            "ticket_id": result.get("ticket_id"),
         },
     )
     db.add(assistant)
-    session.state = {"last_intent": result["intent"], "graph_trace": result["graph_trace"]}
+    session.state = {"last_intent": result["intent"], "graph_trace": result["graph_trace"], "history_summary": f"Última intenção: {result['intent']}", "attachments": session.state.get("attachments", [])}
     db.commit()
     db.refresh(assistant)
     return {
@@ -137,8 +124,8 @@ def post_message(
         "citations": assistant.citations,
         "form_request": result.get("form_request"),
         "confirmation_request": result.get("confirmation_request"),
-        "ticket_id": ticket.id if ticket else None,
-        "tool_result": tool_result,
+        "ticket_id": result.get("ticket_id"),
+        "tool_result": result.get("tool_result"),
         "graph_trace": result["graph_trace"],
     }
 
@@ -160,7 +147,11 @@ def stream_events(session_id: str, identity: dict | None = Depends(optional_iden
         yield "event: status\ndata: {\"status\":\"processing\"}\n\n"
         await asyncio.sleep(0)
         if latest:
-            yield f"event: token\ndata: {json.dumps({'text': latest.content}, ensure_ascii=False)}\n\n"
+            words = latest.content.split()
+            for index in range(0, len(words), 8):
+                text = " ".join(words[index : index + 8]) + (" " if index + 8 < len(words) else "")
+                yield f"event: token\ndata: {json.dumps({'text': text}, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0)
             for citation in latest.citations:
                 yield f"event: citation\ndata: {json.dumps(citation, ensure_ascii=False)}\n\n"
             for event_name in ("form_request", "confirmation_request", "tool_result"):
@@ -171,14 +162,30 @@ def stream_events(session_id: str, identity: dict | None = Depends(optional_iden
                 yield f"event: ticket_created\ndata: {json.dumps({'id': latest.metadata_json['ticket_id']})}\n\n"
             yield f"event: completed\ndata: {json.dumps({'id': latest.id, 'answer': latest.content}, ensure_ascii=False)}\n\n"
         else:
-            yield "event: completed\ndata: {\"answer\":\"Conversa iniciada\"}\n\n"
+            yield "event: error\ndata: {\"code\":\"message_not_found\",\"message\":\"Nenhuma resposta disponível\"}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/sessions/{session_id}/attachments", status_code=202)
-def attachment_handoff(session_id: str, db: Session = Depends(get_db)):
-    if not db.get(ChatSession, session_id):
+async def upload_attachment(
+    session_id: str,
+    file: UploadFile = File(...),
+    kind: str = Form("insurance_card"),
+    identity: dict = Depends(current_identity),
+    db: Session = Depends(get_db),
+):
+    session = db.get(ChatSession, session_id)
+    if not session:
         raise HTTPException(404, "Conversa não encontrada")
-    return {"upload_endpoint": "/api/v1/patient/documents", "requires_auth": True}
+    if session.tenant_id != identity["tenant"]:
+        raise HTTPException(403, "Tenant inválido")
+    if not session.patient_id:
+        session.patient_id = identity["sub"]
+    document = await upload_patient_document(file, kind, identity, db)
+    state = dict(session.state)
+    state["attachments"] = [*state.get("attachments", []), {"id": document["id"], "kind": kind, "status": document["status"]}]
+    session.state = state
+    db.commit()
+    return document
 

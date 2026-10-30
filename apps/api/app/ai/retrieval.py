@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.ai.neo4j_store import Neo4jKnowledgeStore
 from app.config import get_settings
 from app.models import Doctor, DocumentStatus, Insurer, KnowledgeDocument, Specialty, Unit
+from app.observability import operation, record
 
 
 @dataclass(frozen=True)
@@ -37,9 +38,16 @@ def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
         store = None
         try:
             store = Neo4jKnowledgeStore()
-            hits = store.relational(tenant_id) if any(term in lowered for term in relation_terms) else store.vector(tenant_id, question)
+            with operation("retrieval.neo4j", tenant_id=tenant_id):
+                hits = store.hybrid(tenant_id, question)
+                if any(term in lowered for term in relation_terms) and not any(term in lowered for term in {"dura", "duração", "duracao", "tempo"}):
+                    relational = store.relational(tenant_id, question)
+                    known = {hit.content for hit in hits}
+                    hits.extend(hit for hit in relational if hit.content not in known)
+                    hits = sorted(hits, key=lambda item: item.score, reverse=True)[:5]
             if hits:
-                strategy = "graphrag" if any(term in lowered for term in relation_terms) else "vector"
+                strategy = "hybrid-graphrag"
+                record("retrieval.completed", strategy=strategy, sources=[hit.source for hit in hits], result_count=len(hits), confidence=max(hit.score for hit in hits))
                 return RetrievalResult(
                     [hit.content for hit in hits],
                     [{"title": hit.title, "source": hit.source, "excerpt": hit.content[:240]} for hit in hits],
@@ -49,7 +57,7 @@ def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
         except Exception:
             # Startup remains resilient while the graph is being projected. The SQL
             # fallback is still tenant-scoped and only exposes approved content.
-            pass
+            record("retrieval.fallback", reason="graph_unavailable")
         finally:
             if store:
                 store.close()
@@ -58,7 +66,13 @@ def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
             select(Doctor, Specialty, Unit)
             .join(Specialty, Doctor.specialty_id == Specialty.id)
             .join(Unit, Doctor.unit_id == Unit.id)
-            .where(Doctor.tenant_id == tenant_id, Specialty.tenant_id == tenant_id, Unit.tenant_id == tenant_id)
+            .where(
+                Doctor.tenant_id == tenant_id,
+                Doctor.active.is_(True),
+                Doctor.deleted_at.is_(None),
+                Specialty.tenant_id == tenant_id,
+                Unit.tenant_id == tenant_id,
+            )
         ).all()
         insurers = {item.id: item.name for item in db.scalars(select(Insurer).where(Insurer.tenant_id == tenant_id))}
         contexts = []

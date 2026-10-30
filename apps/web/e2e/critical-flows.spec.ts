@@ -55,9 +55,32 @@ test("patient document is reviewed before persistence", async ({ page, request }
   await page.locator('input[type="file"]').setInputFiles(
     path.join(root, "datasets/synthetic-documents/carteirinha-limpo.png"),
   );
-  await expect(page.getByText("Dados extraídos")).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByText("Dados extraídos")).toBeVisible({ timeout: 175_000 });
   await page.getByRole("button", { name: "Confirmar e salvar" }).click();
   await expect(page.getByRole("heading", { name: "Documento confirmado" })).toBeVisible();
+});
+
+test("chat completes authentication and transactional scheduling inline", async ({ page }) => {
+  await page.goto("/chat");
+  await page.getByRole("textbox", { name: "Mensagem", exact: true }).fill("Quero agendar uma consulta");
+  await page.getByRole("button", { name: "Enviar mensagem" }).click();
+  await expect(page.getByRole("button", { name: "Enviar código" })).toBeVisible();
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  await page.getByLabel("Código temporário").fill("123456");
+  await page.getByRole("button", { name: "Validar código" }).click();
+  const confirm = page.getByRole("button", { name: "Confirmar agendamento" }).last();
+  await expect(confirm).toBeVisible({ timeout: 120_000 });
+  await confirm.click();
+  await expect(page.getByText("Operação concluída e auditada.").last()).toBeVisible({ timeout: 120_000 });
+});
+
+test("chat uploads, reviews and confirms OCR fields inline", async ({ page, request }) => {
+  await authenticatePatient(page, request);
+  await page.goto("/chat");
+  await page.locator('input[type="file"]').setInputFiles(path.join(root, "datasets/synthetic-documents/pedido-medico-limpo.png"));
+  await expect(page.getByText(/Revise a extração/)).toBeVisible({ timeout: 120_000 });
+  await page.getByRole("button", { name: "Confirmar dados" }).click();
+  await expect(page.getByText("Documento confirmado e liberado à recepção.")).toBeVisible();
 });
 
 test("administrator publishes ingestion only after review", async ({ page, request }) => {

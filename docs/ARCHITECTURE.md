@@ -4,8 +4,9 @@
 
 - **PostgreSQL:** única fonte operacional. A API nunca consulta o LLM para
   disponibilidade, agendamento ou cancelamento.
-- **Neo4j:** projeção de entidades aprovadas, relações e chunks vetoriais. Toda
-  consulta inclui `tenant_id`; o navegador não aceita Cypher arbitrário.
+- **Neo4j:** projeção de clínica, profissionais, catálogos, documentos e chunks
+  em índice vetorial de 1.024 dimensões. A recuperação híbrida parte de seeds
+  vetoriais, expande relações e reranqueia resultados; toda consulta filtra o tenant.
 - **Redis/Celery:** OCR, embeddings e projeção de outbox fora da requisição.
 - **MinIO:** objetos privados prefixados por clínica e paciente.
 - **LangGraph:** estado e roteamento da conversa. Os nós chamam recuperação ou
@@ -37,9 +38,16 @@ para produzir erro `409` compreensível.
 2. Texto e entidades são revisados; nada é publicado automaticamente.
 3. A aprovação muda o documento para `published` e grava um evento na outbox na
    mesma transação.
-4. O worker aplica `MERGE` idempotente e tenant-scoped no Neo4j.
-5. RAG vetorial responde conteúdo; GraphRAG combina médico, especialidade,
-   convênio e unidade; baixa confiança oferece ticket.
+4. O worker aplica `MERGE` ou deleção idempotente e tenant-scoped no Neo4j.
+5. O índice vetorial recupera seeds; o grafo expande evidências relacionadas e
+   o reranking compõe as fontes. Baixa confiança oferece ticket.
+
+## Fluxo de documento do paciente
+
+O original fica privado no MinIO. OCR bruto, campos e confiança permanecem em
+um rascunho temporário no Redis. Somente a confirmação explícita grava esses
+valores no PostgreSQL e torna o documento visível à recepção. Esses documentos
+nunca são projetados no grafo institucional.
 
 ## Segurança da demonstração
 

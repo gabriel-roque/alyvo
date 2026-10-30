@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 import unicodedata
 from pathlib import Path
@@ -14,11 +15,12 @@ API = os.getenv("API_URL", "http://localhost:8000/api/v1")
 
 
 def normalized(value: str) -> str:
-    return "".join(
+    unaccented = "".join(
         character
         for character in unicodedata.normalize("NFKD", value.casefold())
         if not unicodedata.combining(character)
     )
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", unaccented).split())
 
 
 async def ragas_similarity(reference: str, response: str) -> float:
@@ -36,6 +38,20 @@ async def ragas_similarity(reference: str, response: str) -> float:
 
         sample = SingleTurnSample(reference=reference, response=response)
         return float(await NonLLMStringSimilarity().single_turn_ascore(sample))
+
+
+async def ragas_term_coverage(expected: list[str], evidence: str) -> float:
+    """Fuzzy expected-term coverage scored by Ragas without a remote judge."""
+    words = evidence.split()
+    scores = []
+    for term in expected:
+        if normalized(term) in normalized(evidence):
+            scores.append(await ragas_similarity(term, term))
+            continue
+        size = max(len(term.split()), 1)
+        candidates = [" ".join(words[index : index + size]) for index in range(max(len(words) - size + 1, 1))]
+        scores.append(max([await ragas_similarity(term, candidate) for candidate in candidates] or [0.0]))
+    return sum(scores) / len(scores)
 
 
 def post(
@@ -70,13 +86,13 @@ def evaluate_rag(client: httpx.Client) -> dict:
         recall = len(present) / len(expected)
         recall_scores.append(recall)
         is_low_confidence = result["confidence"] < 0.6
-        grounded.append(
-            float(bool(result["citations"]) or is_low_confidence or result["intent"] != "knowledge")
-        )
+        citation_evidence = " ".join(item.get("excerpt", "") for item in result["citations"])
+        supported = bool(result["citations"]) and bool(present) and any(normalized(term) in normalized(citation_evidence) for term in present)
+        grounded.append(float(supported or is_low_confidence or result["intent"] != "knowledge"))
         citation_scores.append(
-            float(all(item.get("title") and item.get("excerpt") for item in result["citations"]))
+            float(all(item.get("title") and item.get("source") and item.get("excerpt") for item in result["citations"]))
         )
-        ragas_scores.append(asyncio.run(ragas_similarity(" ".join(expected), evidence)))
+        ragas_scores.append(asyncio.run(ragas_term_coverage(expected, evidence)))
         details.append(
             {
                 "question": case["question"],
@@ -90,7 +106,7 @@ def evaluate_rag(client: httpx.Client) -> dict:
         "recall_at_5": sum(recall_scores) / len(recall_scores),
         "grounded_rate": sum(grounded) / len(grounded),
         "citation_precision": sum(citation_scores) / len(citation_scores),
-        "ragas_string_similarity": sum(ragas_scores) / len(ragas_scores),
+        "ragas_term_coverage": sum(ragas_scores) / len(ragas_scores),
     }
     return {"metrics": metrics, "details": details}
 
@@ -129,7 +145,7 @@ def upload_and_score(
         )
     response.raise_for_status()
     item = response.json()
-    for _ in range(120):
+    for _ in range(240):
         if item["status"] not in {"uploaded", "processing"}:
             break
         time.sleep(1)
@@ -145,17 +161,15 @@ def upload_and_score(
 def evaluate_ocr(client: httpx.Client) -> dict:
     expected = json.loads((ROOT / "datasets/ocr-expected.json").read_text())
     headers = patient_headers(client)
-    clean = upload_and_score(
-        client, headers, "identidade-limpo.png", "identity", expected["identidade"]
-    )
-    degraded = upload_and_score(
-        client,
-        headers,
-        "carteirinha-ruido.png",
-        "insurance_card",
-        expected["carteirinha"],
-    )
-    return {"metrics": {"clean_required_fields": clean, "degraded_required_fields": degraded}}
+    kinds = {"identidade": "identity", "carteirinha": "insurance_card", "pedido-medico": "medical_order"}
+    variants = ("limpo", "rotacionado", "desfocado", "ruido")
+    scores: dict[str, float] = {}
+    for document, kind in kinds.items():
+        for variant in variants:
+            scores[f"ocr_{document}_{variant}"] = upload_and_score(client, headers, f"{document}-{variant}.png", kind, expected[document])
+    clean_scores = [score for key, score in scores.items() if key.endswith("_limpo")]
+    degraded_scores = [score for key, score in scores.items() if not key.endswith("_limpo")]
+    return {"metrics": {**scores, "clean_required_fields": sum(clean_scores) / len(clean_scores), "degraded_required_fields": sum(degraded_scores) / len(degraded_scores)}}
 
 
 def main() -> None:
@@ -167,6 +181,7 @@ def main() -> None:
         "recall_at_5": 0.85,
         "grounded_rate": 0.90,
         "citation_precision": 0.90,
+        "ragas_term_coverage": 0.85,
         "clean_required_fields": 0.90,
         "degraded_required_fields": 0.80,
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import smtplib
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -11,6 +12,7 @@ from functools import lru_cache
 import httpx
 
 from app.config import Settings, get_settings
+from app.observability import record
 
 
 @dataclass(frozen=True)
@@ -56,9 +58,13 @@ class NotificationProvider(ABC):
 
 class DeterministicChatProvider(ChatModelProvider):
     def complete(self, prompt: str, context: list[str]) -> str:
+        started = time.perf_counter()
         if not context:
-            return "Não encontrei evidência suficiente na base aprovada. Posso abrir um ticket para a recepção."
-        return f"Com base nas informações aprovadas da clínica: {context[0]}"
+            answer = "Não encontrei evidência suficiente na base aprovada. Posso abrir um ticket para a recepção."
+        else:
+            answer = f"Com base nas informações aprovadas da clínica: {context[0]}"
+        record("llm.complete", provider="mock", model="deterministic", input_tokens=len(prompt.split()) + sum(len(item.split()) for item in context), output_tokens=len(answer.split()), duration_ms=round((time.perf_counter() - started) * 1000, 1))
+        return answer
 
 
 class OllamaChatProvider(ChatModelProvider):
@@ -66,6 +72,7 @@ class OllamaChatProvider(ChatModelProvider):
         self.settings = settings
 
     def complete(self, prompt: str, context: list[str]) -> str:
+        started = time.perf_counter()
         fallback = DeterministicChatProvider()
         if not context:
             return fallback.complete(prompt, context)
@@ -86,10 +93,13 @@ class OllamaChatProvider(ChatModelProvider):
                 timeout=self.settings.ollama_timeout_seconds,
             )
             response.raise_for_status()
-            return response.json()["message"]["content"]
+            answer = response.json()["message"]["content"]
+            record("llm.complete", provider="ollama", model=self.settings.ollama_model, input_tokens=len(prompt.split()) + sum(len(item.split()) for item in context), output_tokens=len(answer.split()), duration_ms=round((time.perf_counter() - started) * 1000, 1))
+            return answer
         except (httpx.HTTPError, KeyError, ValueError):
             # Retrieval remains useful and grounded if a local model is cold or
             # temporarily saturated; never turn provider latency into an API 500.
+            record("llm.fallback", provider="ollama", model=self.settings.ollama_model, duration_ms=round((time.perf_counter() - started) * 1000, 1))
             return fallback.complete(prompt, context)
 
 
@@ -98,6 +108,7 @@ class OpenRouterChatProvider(ChatModelProvider):
         self.settings = settings
 
     def complete(self, prompt: str, context: list[str]) -> str:
+        started = time.perf_counter()
         if not self.settings.openrouter_api_key:
             raise RuntimeError("OPENROUTER_API_KEY não configurada")
         response = httpx.post(
@@ -113,19 +124,25 @@ class OpenRouterChatProvider(ChatModelProvider):
             timeout=60,
         )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        payload = response.json()
+        answer = payload["choices"][0]["message"]["content"]
+        usage = payload.get("usage", {})
+        record("llm.complete", provider="openrouter", model=self.settings.openrouter_model, input_tokens=usage.get("prompt_tokens"), output_tokens=usage.get("completion_tokens"), duration_ms=round((time.perf_counter() - started) * 1000, 1))
+        return answer
 
 
 class DeterministicEmbeddingProvider(EmbeddingProvider):
     """Small stable embedding for tests; production adapter remains interchangeable."""
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        started = time.perf_counter()
         vectors = []
         for text in texts:
             digest = hashlib.sha256(text.casefold().encode()).digest()
             raw = [(value - 127.5) / 127.5 for value in digest]
             norm = math.sqrt(sum(value * value for value in raw)) or 1
             vectors.append([value / norm for value in raw])
+        record("embedding.complete", provider="mock", model="sha256", count=len(texts), dimensions=len(vectors[0]) if vectors else 0, duration_ms=round((time.perf_counter() - started) * 1000, 1))
         return vectors
 
 
@@ -136,7 +153,10 @@ class BgeM3EmbeddingProvider(EmbeddingProvider):
         self.model = SentenceTransformer("BAAI/bge-m3")
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return self.model.encode(texts, normalize_embeddings=True).tolist()
+        started = time.perf_counter()
+        vectors = self.model.encode(texts, normalize_embeddings=True).tolist()
+        record("embedding.complete", provider="local", model="BAAI/bge-m3", count=len(texts), dimensions=len(vectors[0]) if vectors else 0, duration_ms=round((time.perf_counter() - started) * 1000, 1))
+        return vectors
 
 
 class DeterministicOcrProvider(OcrProvider):

@@ -9,6 +9,7 @@ from app.ai.providers import notification_provider
 from app.config import get_settings
 from app.db import get_db
 from app.models import OtpCode, RefreshToken, Role, User
+from app.observability import record
 from app.security import (
     cpf_lookup,
     decode_token,
@@ -107,6 +108,7 @@ def start_patient_auth(payload: PatientStart, db: Session = Depends(get_db)):
     if not destination:
         raise HTTPException(422, "Informe um e-mail para receber o código")
     notification_provider().send_otp(destination, code)
+    record("auth.otp_requested", tenant_id=payload.tenant_id, patient_exists=bool(patient))
     response = {"status": "sent", "expires_in": 600, "delivery": "mailpit"}
     if get_settings().app_env != "production":
         response["demo_code"] = code
@@ -132,6 +134,7 @@ def verify_patient(payload: PatientVerify, db: Session = Depends(get_db)):
     if not patient:
         return {"status": "registration_required", "registration_token": issue_token("pending", payload.tenant_id, "patient", 15, kind="registration")}
     result = token_pair(patient, db)
+    record("auth.patient_verified", tenant_id=payload.tenant_id, user_id=patient.id)
     result["patient"] = {"id": patient.id, "name": patient.name}
     return result
 
@@ -148,6 +151,7 @@ def register_patient(payload: PatientRegister, db: Session = Depends(get_db)):
     db.add(patient)
     db.commit()
     db.refresh(patient)
+    record("auth.patient_registered", tenant_id=payload.tenant_id, user_id=patient.id)
     return token_pair(patient, db)
 
 
@@ -157,6 +161,7 @@ def login_staff(payload: StaffLogin, db: Session = Depends(get_db)):
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(401, "Credenciais inválidas")
     result = token_pair(user, db)
+    record("auth.staff_login", tenant_id=payload.tenant_id, user_id=user.id, role=user.role.value)
     result["user"] = {"id": user.id, "name": user.name, "role": user.role.value}
     return result
 

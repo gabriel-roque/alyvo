@@ -11,6 +11,7 @@ from app.ai.providers import (
 )
 from app.config import get_settings
 from app.db import SessionLocal, set_database_tenant
+from app.document_drafts import put_draft
 from app.models import (
     Doctor,
     DocumentStatus,
@@ -25,6 +26,7 @@ from app.models import (
     Tenant,
     Unit,
 )
+from app.observability import correlation_id_context, operation, record
 from sqlalchemy import select
 
 from worker.celery_app import celery_app
@@ -32,7 +34,8 @@ from worker.neo4j_projection import Neo4jProjector
 
 
 @celery_app.task(name="worker.tasks.project_outbox", autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
-def project_outbox(limit: int = 100) -> dict:
+def project_outbox(limit: int = 100, request_id: str = "background") -> dict:
+    correlation_id_context.set(request_id)
     processed = 0
     projector = Neo4jProjector()
     try:
@@ -52,8 +55,10 @@ def project_outbox(limit: int = 100) -> dict:
                     .with_for_update(skip_locked=True)
                 ).all()
                 for event in events:
+                    correlation_id_context.set(event.payload.get("_correlation_id", request_id))
                     projector.project(event.event_type, event.tenant_id, event.payload)
                     event.processed_at = datetime.now(timezone.utc)
+                    record("outbox.projected", event_type=event.event_type, aggregate_id=event.aggregate_id, tenant_id=event.tenant_id)
                     processed += 1
                 db.commit()
             if processed >= limit:
@@ -64,14 +69,18 @@ def project_outbox(limit: int = 100) -> dict:
 
 
 @celery_app.task(name="worker.tasks.extract_document")
-def extract_document(content_hex: str, filename: str) -> dict:
-    result = ocr_provider().extract(bytes.fromhex(content_hex), filename)
+def extract_document(content_hex: str, filename: str, request_id: str = "background") -> dict:
+    correlation_id_context.set(request_id)
+    with operation("ocr.extract", filename=filename):
+        result = ocr_provider().extract(bytes.fromhex(content_hex), filename)
     return {"raw_text": result.raw_text, "fields": result.fields, "confidence": result.confidence}
 
 
 @celery_app.task(name="worker.tasks.embed_chunks")
-def embed_chunks(chunks: list[str]) -> dict:
-    vectors = embedding_provider().embed(chunks)
+def embed_chunks(chunks: list[str], request_id: str = "background") -> dict:
+    correlation_id_context.set(request_id)
+    with operation("embedding.batch", count=len(chunks)):
+        vectors = embedding_provider().embed(chunks)
     return {"count": len(vectors), "dimensions": len(vectors[0]) if vectors else 0, "vectors": vectors}
 
 
@@ -132,6 +141,11 @@ def _structured_fields(raw_text: str, kind: str, fallback: dict) -> dict:
             if not unicodedata.combining(character)
         )
         normalized_label = re.sub(r"[^a-z0-9]", "", normalized_label).replace("0", "o")
+        normalized_label = {
+            "paclente": "paciente",
+            "solicltante": "solicitante",
+            "convenlo": "convenio",
+        }.get(normalized_label, normalized_label)
         key = aliases.get(normalized_label)
         if key in fields:
             extracted[key] = value.strip()
@@ -172,7 +186,8 @@ def _known_entities(db, tenant_id: str, text: str) -> list[dict]:
 
 
 @celery_app.task(name="worker.tasks.process_patient_document", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
-def process_patient_document(document_id: str, tenant_id: str | None = None) -> dict:
+def process_patient_document(document_id: str, tenant_id: str | None = None, request_id: str = "background") -> dict:
+    correlation_id_context.set(request_id)
     with SessionLocal() as db:
         set_database_tenant(db, tenant_id or get_settings().demo_tenant)
         item = db.get(PatientDocument, document_id)
@@ -182,15 +197,18 @@ def process_patient_document(document_id: str, tenant_id: str | None = None) -> 
             item.status = DocumentStatus.processing
             db.commit()
             content = object_storage_provider().get_private(item.storage_key)
-            result = ocr_provider().extract(content, item.filename)
-            item.raw_ocr = result.raw_text
-            item.fields = _structured_fields(result.raw_text, item.kind, result.fields)
+            with operation("ocr.patient_document", document_id=item.id, kind=item.kind):
+                result = ocr_provider().extract(content, item.filename)
+            fields = _structured_fields(result.raw_text, item.kind, result.fields)
             base_confidence = min(result.confidence.values(), default=0.0)
-            item.confidence = {
-                key: result.confidence.get(key, base_confidence) for key in item.fields
+            confidence = {
+                key: result.confidence.get(key, base_confidence) for key in fields
             }
+            # Extracted fields are transient until the patient explicitly accepts them.
+            put_draft(item.tenant_id, item.patient_id, item.id, fields, confidence, result.raw_text)
             item.status = DocumentStatus.review_required
             db.commit()
+            record("ocr.patient_document.ready", document_id=item.id, field_names=sorted(fields))
             return {"status": item.status.value, "document_id": item.id}
         except Exception as exc:
             item.status = DocumentStatus.failed
@@ -199,7 +217,8 @@ def process_patient_document(document_id: str, tenant_id: str | None = None) -> 
 
 
 @celery_app.task(name="worker.tasks.process_knowledge_document", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
-def process_knowledge_document(document_id: str, tenant_id: str | None = None) -> dict:
+def process_knowledge_document(document_id: str, tenant_id: str | None = None, request_id: str = "background") -> dict:
+    correlation_id_context.set(request_id)
     with SessionLocal() as db:
         set_database_tenant(db, tenant_id or get_settings().demo_tenant)
         item = db.get(KnowledgeDocument, document_id)

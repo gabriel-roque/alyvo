@@ -52,6 +52,7 @@ class Tenant(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(160))
     timezone: Mapped[str] = mapped_column(String(64), default="America/Sao_Paulo")
+    cancellation_notice_hours: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class User(Base):

@@ -8,7 +8,7 @@
   {"question":"O que devo apresentar na recepção para exame de sangue?","expected_terms":["pedido médico","documento com foto","carteirinha"],"intent":"knowledge","strategy":"vector"},
   {"question":"Onde fica a Unidade Centro?","expected_terms":["Rua das Acácias","320"],"intent":"knowledge","strategy":"vector"},
   {"question":"A clínica aceita Amil?","expected_terms":["Amil"],"intent":"knowledge","strategy":"vector"},
-  {"question":"Quanto dura uma consulta de cardiologia?","expected_terms":["CPF","código temporário"],"intent":"schedule","strategy":"auth"},
+  {"question":"Quanto dura uma consulta de cardiologia?","expected_terms":["30 minutos"],"intent":"knowledge","strategy":"graphrag"},
   {"question":"Quero agendar uma consulta","expected_terms":["CPF","código temporário"],"intent":"schedule","strategy":"auth"},
   {"question":"Tem horário de cardiologia?","expected_terms":["CPF","código temporário"],"intent":"schedule","strategy":"auth"},
   {"question":"Quero cancelar minha consulta","expected_terms":["CPF","código temporário"],"intent":"cancel_appointment","strategy":"auth"},

@@ -60,6 +60,7 @@ def seed_demo(db: Session) -> None:
         unit_ids=[center.id, south.id],
     )
     db.add_all([consultation, blood_exam])
+    db.flush()
 
     today = datetime.now(timezone.utc).date()
     for offset in range(1, 8):
@@ -85,6 +86,9 @@ def seed_demo(db: Session) -> None:
         db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="units", aggregate_id=unit.id, event_type="units.upserted", payload={"id": unit.id, "name": unit.name, "address": unit.address}))
     for insurer in (vida, amil):
         db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="insurers", aggregate_id=insurer.id, event_type="insurers.upserted", payload={"id": insurer.id, "name": insurer.name}))
+    db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="exams", aggregate_id=blood_exam.id, event_type="exams.upserted", payload={"id": blood_exam.id, "name": blood_exam.name, "preparation": blood_exam.preparation, "unit_ids": blood_exam.unit_ids, "active": blood_exam.active}))
+    db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="services", aggregate_id=consultation.id, event_type="services.upserted", payload={"id": consultation.id, "name": consultation.name, "duration_minutes": consultation.duration_minutes, "specialty_id": consultation.specialty_id, "active": consultation.active}))
+    db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="projection", aggregate_id=primary.id, event_type="projection.v4.rebuild", payload={"id": primary.id, "clinic_name": primary.name}))
     for doctor in doctors:
         db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="doctor", aggregate_id=doctor.id, event_type="doctor.upserted", payload={"id": doctor.id, "name": doctor.name, "crm": doctor.crm, "specialty_id": doctor.specialty_id, "unit_id": doctor.unit_id, "insurer_ids": doctor.insurer_ids}))
     knowledge_documents = [
@@ -138,4 +142,25 @@ def seed_demo(db: Session) -> None:
 def ensure_seeded(db: Session) -> None:
     if db.scalar(select(Tenant.id).limit(1)) is None:
         seed_demo(db)
+        return
+    # One-time rebuild marker for the complete graph schema introduced in v4.
+    # It also upgrades persistent demo volumes created by earlier versions.
+    if db.scalar(select(OutboxEvent.id).where(OutboxEvent.event_type == "projection.v4.rebuild")):
+        return
+    for tenant in db.scalars(select(Tenant)).all():
+        db.add(OutboxEvent(tenant_id=tenant.id, aggregate_type="projection", aggregate_id=tenant.id, event_type="projection.v4.rebuild", payload={"id": tenant.id, "clinic_name": tenant.name}))
+        for model, kind in ((Specialty, "specialties"), (Unit, "units"), (Insurer, "insurers"), (Exam, "exams"), (Service, "services")):
+            for item in db.scalars(select(model).where(model.tenant_id == tenant.id)).all():
+                if hasattr(item, "active") and not item.active:
+                    continue
+                payload = {"id": item.id, "name": item.name}
+                for field in ("description", "address", "preparation", "unit_ids", "duration_minutes", "specialty_id", "active"):
+                    if hasattr(item, field):
+                        payload[field] = getattr(item, field)
+                db.add(OutboxEvent(tenant_id=tenant.id, aggregate_type=kind, aggregate_id=item.id, event_type=f"{kind}.upserted", payload=payload))
+        for doctor in db.scalars(select(Doctor).where(Doctor.tenant_id == tenant.id, Doctor.deleted_at.is_(None))).all():
+            db.add(OutboxEvent(tenant_id=tenant.id, aggregate_type="doctor", aggregate_id=doctor.id, event_type="doctor.upserted", payload={"id": doctor.id, "name": doctor.name, "crm": doctor.crm, "specialty_id": doctor.specialty_id, "unit_id": doctor.unit_id, "insurer_ids": doctor.insurer_ids}))
+        for document in db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.tenant_id == tenant.id, KnowledgeDocument.status == DocumentStatus.published)).all():
+            db.add(OutboxEvent(tenant_id=tenant.id, aggregate_type="knowledge_document", aggregate_id=document.id, event_type="knowledge.published", payload={"id": document.id, "title": document.title, "source": document.source, "entities": document.entities, "chunks": document.chunks or [document.content]}))
+    db.commit()
 

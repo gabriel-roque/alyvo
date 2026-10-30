@@ -17,7 +17,7 @@ export default function DocumentReviewPage() {
     setMessage("Enviando e processando com OCR…");
     try {
       let item = await uploadPatientDocument(file, "insurance_card");
-      for (let attempt = 0; attempt < 20 && ["uploaded", "processing"].includes(item.status); attempt += 1) {
+      for (let attempt = 0; attempt < 180 && ["uploaded", "processing"].includes(item.status); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         item = await getPatientDocument(item.id);
       }
