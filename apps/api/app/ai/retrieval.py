@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.neo4j_store import Neo4jKnowledgeStore
+from app.ai.neo4j_store import knowledge_store
 from app.config import get_settings
 from app.models import Doctor, DocumentStatus, Insurer, KnowledgeDocument, Specialty, Unit
 from app.observability import operation, record
@@ -39,9 +39,8 @@ def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
         "atendimento",
     }
     if get_settings().app_env != "test":
-        store = None
         try:
-            store = Neo4jKnowledgeStore()
+            store = knowledge_store()
             with operation("retrieval.neo4j", tenant_id=tenant_id):
                 hits = store.hybrid(tenant_id, question)
                 if any(term in lowered for term in relation_terms) and not any(term in lowered for term in {"dura", "duração", "duracao", "tempo"}):
@@ -50,21 +49,49 @@ def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
                     hits.extend(hit for hit in relational if hit.content not in known)
                     hits = sorted(hits, key=lambda item: item.score, reverse=True)[:5]
             if hits:
+                generic_terms = {
+                    "clinica",
+                    "clínica",
+                    "como",
+                    "onde",
+                    "qual",
+                    "quais",
+                    "preciso",
+                    "posso",
+                    "abre",
+                    "estar",
+                    "devo",
+                    "dura",
+                    "levar",
+                    "para",
+                    "precisa",
+                    "quanto",
+                    "serve",
+                    "tem",
+                    "uma",
+                }
+                terms = {
+                    term.strip(".,?!:;").casefold().removesuffix("s")
+                    for term in question.split()
+                    if len(term.strip(".,?!:;")) > 3
+                    and term.strip(".,?!:;").casefold() not in generic_terms
+                }
+                evidence = " ".join(hit.content for hit in hits).casefold()
+                lexical_matches = sum(term in evidence for term in terms)
+                lexical_coverage = lexical_matches / max(len(terms), 1)
+                confidence = max(hit.score for hit in hits) if terms and lexical_coverage >= 0.5 else 0.45
                 strategy = "hybrid-graphrag"
-                record("retrieval.completed", strategy=strategy, sources=[hit.source for hit in hits], result_count=len(hits), confidence=max(hit.score for hit in hits))
+                record("retrieval.completed", strategy=strategy, sources=[hit.source for hit in hits], result_count=len(hits), confidence=confidence)
                 return RetrievalResult(
                     [hit.content for hit in hits],
                     [{"title": hit.title, "source": hit.source, "excerpt": hit.content[:240]} for hit in hits],
-                    max(hit.score for hit in hits),
+                    confidence,
                     strategy,
                 )
         except Exception:
             # Startup remains resilient while the graph is being projected. The SQL
             # fallback is still tenant-scoped and only exposes approved content.
             record("retrieval.fallback", reason="graph_unavailable")
-        finally:
-            if store:
-                store.close()
     if any(term in lowered for term in relation_terms):
         rows = db.execute(
             select(Doctor, Specialty, Unit)

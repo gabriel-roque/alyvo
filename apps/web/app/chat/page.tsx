@@ -13,7 +13,7 @@ import {
   registerPatient,
   requestChatAction,
   resumeChat,
-  sendMessage,
+  streamMessage,
 } from "@/lib/api";
 
 type ToolItem = {
@@ -23,6 +23,10 @@ type ToolItem = {
   starts_at?: string;
   status?: string;
   reason?: string;
+  crm?: string;
+  specialty?: string;
+  insurers?: string[];
+  address?: string;
 };
 type Message = {
   role: "user" | "assistant";
@@ -45,8 +49,10 @@ export default function ChatPage() {
   const [text, setText] = useState("");
   const [session, setSession] = useState<string>();
   const [loading, setLoading] = useState(false);
-  const [cpf, setCpf] = useState("123.456.789-09");
-  const [birthDate, setBirthDate] = useState("1990-01-15");
+  const [activity, setActivity] = useState("");
+  const [draft, setDraft] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [registrationToken, setRegistrationToken] = useState("");
@@ -67,21 +73,35 @@ export default function ChatPage() {
     window.setTimeout(() => streamEnd.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const content = text.trim();
+  async function sendPrompt(content: string) {
     if (!content || loading) return;
     setMessages((current) => [...current, { role: "user", content }]);
     setText("");
     setLoading(true);
+    setActivity("Entendendo seu pedido…");
+    setDraft("");
     setNotice("");
     try {
-      appendResponse(await sendMessage(await ensureSession(), content));
+      const response = await streamMessage(await ensureSession(), content, (event, payload) => {
+        if (event === "status") setActivity(payload.label ?? "Consultando…");
+        if (event === "delta") {
+          setActivity("");
+          setDraft((current) => current + (payload.text ?? ""));
+        }
+      });
+      appendResponse(response);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Não foi possível consultar a Alyvo.");
     } finally {
       setLoading(false);
+      setActivity("");
+      setDraft("");
     }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await sendPrompt(text.trim());
   }
 
   async function authenticate() {
@@ -147,7 +167,7 @@ export default function ChatPage() {
         <header className="chat-intro">
           <div className="assistant-mark"><Sparkles /></div>
           <div><h1>Assistente Alyvo</h1><p>Informação administrativa, agenda e conhecimento da clínica.</p></div>
-          <span><i /> Online</span>
+          <span><i /> Pronta para ajudar</span>
         </header>
 
         <div className="message-stream" aria-live="polite">
@@ -174,7 +194,7 @@ export default function ChatPage() {
                           <label>E-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
                         </div>
                       )}
-                      <button className="button button-primary" disabled={loading} onClick={() => void authenticate()}>
+                      <button className="button button-primary" disabled={loading || (authMode === "identify" ? !cpf || !birthDate : !name || !email)} onClick={() => void authenticate()}>
                         <ShieldCheck /> {authMode === "identify" ? "Continuar" : "Criar cadastro"}
                       </button>
                     </section>
@@ -185,9 +205,31 @@ export default function ChatPage() {
                       {items.map((item) => (
                         <button key={item.id} onClick={() => void action("create_appointment", { doctor_id: typeof item.doctor === "object" ? item.doctor.id : "", starts_at: item.starts_at, reason: "Consulta" })}>
                           <span className="tool-icon"><CalendarDays /></span>
-                          <span><strong>{label(item.doctor)}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR")} · {label(item.unit)}</small></span>
+                          <span><strong>{label(item.doctor)}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone, weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)}</small></span>
                           <span className="tool-action">Agendar</span>
                         </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {result?.type === "directory" && (
+                    <div className="tool-cards directory-cards">
+                      {items.map((item) => (
+                        <div className="appointment-tool" key={item.id}>
+                          <span className="tool-icon"><Stethoscope /></span>
+                          <span><strong>{label(item.doctor)}</strong><small>{item.specialty} · {label(item.unit)} · {item.insurers?.join(", ")}</small></span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {result?.type === "units" && (
+                    <div className="tool-cards directory-cards">
+                      {items.map((item) => (
+                        <div className="appointment-tool" key={item.id}>
+                          <span className="tool-icon"><CalendarDays /></span>
+                          <span><strong>{label(item.unit)}</strong><small>{item.address}</small></span>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -197,7 +239,7 @@ export default function ChatPage() {
                       {items.map((item) => (
                         <div className="appointment-tool" key={item.id}>
                           <span className="tool-icon"><Clock3 /></span>
-                          <span><strong>{label(item.doctor) || item.reason}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR")} · {item.status}</small></span>
+                          <span><strong>{label(item.doctor) || item.reason}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone, weekday: "long", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)} · {item.status === "confirmed" ? "confirmada" : "cancelada"}</small></span>
                           {item.status === "confirmed" && <button onClick={() => void action("cancel_appointment", { appointment_id: item.id })}>Cancelar</button>}
                         </div>
                       ))}
@@ -223,11 +265,19 @@ export default function ChatPage() {
                       {message.citations.map((citation, citationIndex) => <p key={`${citation.title}-${citationIndex}`}><strong>{citation.title}</strong><small>{citation.source} — {citation.excerpt}</small></p>)}
                     </details>
                   ) : null}
+
+                  {message.response?.suggestions?.length ? (
+                    <div className="reply-suggestions" aria-label="Sugestões de resposta">
+                      {message.response.suggestions.map((suggestion) => (
+                        <button key={`${index}-${suggestion.label}`} disabled={loading} onClick={() => void sendPrompt(suggestion.message)}>{suggestion.label}</button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </article>
             );
           })}
-          {loading && <div className="chat-message assistant"><span className="message-avatar">A</span><div className="message-skeleton"><i /><i /><i /></div></div>}
+          {loading && <div className="chat-message assistant" aria-live="polite"><span className="message-avatar">A</span><div className="message-content streaming-message"><p>{draft || activity}</p>{!draft && <span className="typing-dots"><i /><i /><i /></span>}</div></div>}
           {notice && <p className="error-text" role="alert">{notice}</p>}
           {messages.length === 1 && (
             <div className="suggestion-grid">

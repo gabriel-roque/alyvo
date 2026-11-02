@@ -6,13 +6,20 @@ transacional e um backoffice enxuto. Não oferece diagnóstico, prescrição ou 
 
 ## Executar
 
-Requisitos: Docker com Compose e cerca de 12 GB livres para imagens e modelos.
+Requisitos: Docker com Compose, GPU NVIDIA com pelo menos 8 GB, NVIDIA Container
+Toolkit e cerca de 12 GB livres para imagens e modelos. Valide o host antes de subir:
+
+```bash
+bash scripts/gpu-preflight.sh
+```
 
 ```bash
 docker compose up --build
 ```
 
-Na primeira execução, o Compose baixa o `qwen3:8b` e o BGE-M3. Quando os
+Na primeira execução, o Compose baixa o `qwen3:8b-q4_K_M` e o BGE-M3. O Ollama
+mantém o modelo aquecido, com contexto de 4.096 tokens, Flash Attention e cache KV
+quantizado. Quando os
 serviços estiverem saudáveis:
 
 - aplicação: `http://localhost:3000`
@@ -38,6 +45,15 @@ A validação cobre testes Python e web, tipos, lint, build, migrações, RLS,
 concorrência de agenda, outbox/Neo4j, OCR na ingestão de conhecimento,
 RAG/GraphRAG e fluxos Playwright em 375, 768, 1024 e 1440 px. O resultado fica em
 `reports/validation.json`.
+
+Para medir latência aquecida, concorrência e confirmar que o modelo está 100% na
+GPU:
+
+```bash
+docker compose --profile validation run --rm validate python3 scripts/benchmark-chat.py
+```
+
+O relatório fica em `reports/performance.json`.
 
 ## Componentes
 

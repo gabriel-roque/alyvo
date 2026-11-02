@@ -12,8 +12,10 @@ export type ChatResponse = {
   citations: Citation[];
   auth_required: boolean;
   confirmation_request?: { id: string; tool: string; summary: string } | null;
-  tool_result?: { type: string; items?: Record<string, unknown>[]; appointment?: Record<string, unknown> } | null;
+  tool_result?: { type: string; items?: Record<string, unknown>[]; appointment?: Record<string, unknown>; timezone?: string; total?: number; has_more?: boolean; query_summary?: string } | null;
   tool_call?: { name: string } | null;
+  suggestions?: { label: string; message: string }[];
+  resolved_request?: Record<string, unknown> | null;
 };
 type BackofficePayload = Record<string, unknown> & { items: never[] };
 
@@ -36,7 +38,16 @@ export async function apiFetch(path: string, init: RequestInit = {}, token?: str
 async function json<T>(response: Response, fallback: string): Promise<T> {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail ?? fallback);
+    const detail = payload.detail;
+    if (typeof detail === "string") throw new Error(detail);
+    if (Array.isArray(detail)) {
+      const fields = detail
+        .map((item) => item?.loc?.at?.(-1))
+        .filter((item): item is string => typeof item === "string")
+        .join(" e ");
+      throw new Error(fields ? `Confira os campos: ${fields}.` : fallback);
+    }
+    throw new Error(fallback);
   }
   return response.json();
 }
@@ -47,6 +58,40 @@ export async function createChatSession() {
 
 export async function sendMessage(sessionId: string, content: string) {
   return json<ChatResponse>(await apiFetch(`/chat/sessions/${sessionId}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) }, patientToken), "A assistente está temporariamente indisponível");
+}
+
+export async function streamMessage(
+  sessionId: string,
+  content: string,
+  onEvent: (event: "status" | "delta", payload: { label?: string; text?: string }) => void,
+) {
+  const response = await apiFetch(`/chat/sessions/${sessionId}/messages/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify({ content }),
+  }, patientToken);
+  if (!response.ok || !response.body) throw new Error("A assistente está temporariamente indisponível");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let final: ChatResponse | undefined;
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      const event = frame.match(/^event: (.+)$/m)?.[1];
+      const data = frame.match(/^data: (.+)$/m)?.[1];
+      if (!event || !data) continue;
+      const payload = JSON.parse(data);
+      if (event === "final") final = payload as ChatResponse;
+      else if (event === "status" || event === "delta") onEvent(event, payload);
+    }
+    if (done) break;
+  }
+  if (!final) throw new Error("A resposta foi interrompida. Tente novamente.");
+  return final;
 }
 
 export async function resumeChat(sessionId: string) {

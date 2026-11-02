@@ -1,8 +1,10 @@
+import json
 import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -50,6 +52,8 @@ def get_session(db: Session, session_id: str, identity: dict | None = None) -> C
 
 def save_response(db: Session, session: ChatSession, result: dict) -> dict:
     state = dict(session.state or {})
+    if result.get("dialog_state"):
+        state["dialog"] = result.pop("dialog_state")
     if result.get("pending_tool"):
         state["pending_tool"] = result["pending_tool"]
     confirmation = result.get("confirmation_request")
@@ -59,7 +63,7 @@ def save_response(db: Session, session: ChatSession, result: dict) -> dict:
         result["confirmation_request"] = {
             "id": confirmation_id,
             "tool": confirmation["tool"],
-            "summary": "Confirme para concluir esta operação.",
+            "summary": confirmation.get("summary", "Confirme para concluir esta operação."),
         }
     session.state = state
     assistant = ChatMessage(
@@ -68,7 +72,7 @@ def save_response(db: Session, session: ChatSession, result: dict) -> dict:
         role="assistant",
         content=result["answer"],
         citations=result.get("citations", []),
-        metadata_json=jsonable_encoder({key: result.get(key) for key in ("intent", "tool_result", "auth_required", "confirmation_request", "tool_call")}),
+        metadata_json=jsonable_encoder({key: result.get(key) for key in ("intent", "tool_result", "auth_required", "confirmation_request", "tool_call", "suggestions", "resolved_request")}),
     )
     db.add(assistant)
     db.commit()
@@ -83,6 +87,8 @@ def save_response(db: Session, session: ChatSession, result: dict) -> dict:
         "confirmation_request": result.get("confirmation_request"),
         "tool_result": result.get("tool_result"),
         "tool_call": result.get("tool_call"),
+        "suggestions": result.get("suggestions", []),
+        "resolved_request": result.get("resolved_request"),
     }
 
 
@@ -108,8 +114,44 @@ def post_message(session_id: str, payload: MessageCreate, identity: dict | None 
     ).all()
     history = [{"role": item.role, "content": item.content} for item in reversed(previous)]
     db.add(ChatMessage(tenant_id=session.tenant_id, session_id=session.id, role="user", content=payload.content))
-    result = run_workflow(db, session.tenant_id, identity, payload.content, history)
+    result = run_workflow(db, session.tenant_id, identity, payload.content, history, session.state)
     return save_response(db, session, result)
+
+
+@router.post("/sessions/{session_id}/messages/stream")
+def stream_message(
+    session_id: str,
+    payload: MessageCreate,
+    identity: dict | None = Depends(optional_identity),
+    db: Session = Depends(get_db),
+):
+    session = get_session(db, session_id, identity)
+
+    def events():
+        normalized = payload.content.casefold()
+        stage = "Consultando a agenda…" if any(term in normalized for term in ("horário", "horario", "agenda", "sexta", "agendar")) else "Buscando informações aprovadas…"
+        yield f"event: status\ndata: {json.dumps({'label': stage}, ensure_ascii=False)}\n\n"
+        previous = db.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session.id)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(10)
+        ).all()
+        history = [{"role": item.role, "content": item.content} for item in reversed(previous)]
+        db.add(ChatMessage(tenant_id=session.tenant_id, session_id=session.id, role="user", content=payload.content))
+        result = run_workflow(db, session.tenant_id, identity, payload.content, history, session.state)
+        saved = save_response(db, session, result)
+        words = saved["answer"].split(" ")
+        for index, word in enumerate(words):
+            chunk = word if index == len(words) - 1 else f"{word} "
+            yield f"event: delta\ndata: {json.dumps({'text': chunk}, ensure_ascii=False)}\n\n"
+        yield f"event: final\ndata: {json.dumps(jsonable_encoder(saved), ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/sessions/{session_id}/resume")
@@ -146,7 +188,12 @@ def confirm_action(session_id: str, confirmation_id: str, payload: ConfirmationB
     state.pop("confirmation", None)
     session.state = state
     if not payload.accepted:
-        return save_response(db, session, {"answer": "Operação cancelada.", "intent": confirmation["tool"], "confidence": 1.0, "citations": [], "tool_result": None, "tool_call": {"name": confirmation["tool"]}})
+        answer = (
+            "O cancelamento foi interrompido. Sua consulta continua confirmada."
+            if confirmation["tool"] == "cancel_appointment"
+            else "O agendamento não foi concluído."
+        )
+        return save_response(db, session, {"answer": answer, "intent": confirmation["tool"], "confidence": 1.0, "citations": [], "tool_result": None, "tool_call": {"name": confirmation["tool"]}})
     if not identity or identity.get("role") != "patient":
         raise HTTPException(401, "Identificação necessária")
     if confirmation["tool"] == "create_appointment":

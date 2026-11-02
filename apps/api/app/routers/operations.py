@@ -2,10 +2,11 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.ai.conversation import local_datetime, local_to_utc, tenant_timezone
 from app.db import get_db
 from app.models import (
     Appointment,
@@ -31,6 +32,16 @@ class AppointmentCreate(BaseModel):
     starts_at: datetime
     reason: str = "Consulta"
     confirmed: bool
+
+
+def lock_appointment_slot(db: Session, tenant_id: str, doctor_id: str, starts_at: datetime) -> None:
+    """Serialize bookings for one doctor and start time inside the transaction."""
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        lock_key = f"appointment:{tenant_id}:{doctor_id}:{starts_at.isoformat()}"
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+            {"lock_key": lock_key},
+        )
 
 
 def appointment_view(item: Appointment, doctors: dict | None = None, units: dict | None = None) -> dict:
@@ -65,7 +76,12 @@ def available_slots(
     doctor_id: str | None = None,
     specialty_id: str | None = None,
     unit_id: str | None = None,
+    insurer_id: str | None = None,
+    period: str | None = None,
 ) -> list[dict]:
+    tenant = db.get(Tenant, tenant_id)
+    timezone_name = tenant.timezone if tenant else "America/Sao_Paulo"
+    zone = tenant_timezone(timezone_name)
     doctors_query = select(Doctor).where(
         Doctor.tenant_id == tenant_id,
         Doctor.active.is_(True),
@@ -75,10 +91,14 @@ def available_slots(
         doctors_query = doctors_query.where(Doctor.id == doctor_id)
     if specialty_id:
         doctors_query = doctors_query.where(Doctor.specialty_id == specialty_id)
-    doctors = {item.id: item for item in db.scalars(doctors_query)}
+    doctors = {
+        item.id: item
+        for item in db.scalars(doctors_query)
+        if not insurer_id or insurer_id in item.insurer_ids
+    }
     units = {item.id: item for item in db.scalars(select(Unit).where(Unit.tenant_id == tenant_id, Unit.active.is_(True)))}
-    starts = datetime.combine(from_date, time.min, tzinfo=timezone.utc)
-    ends = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    starts = datetime.combine(from_date, time.min, tzinfo=zone).astimezone(timezone.utc)
+    ends = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
     busy = db.scalars(
         select(Appointment).where(
             Appointment.tenant_id == tenant_id,
@@ -121,8 +141,8 @@ def available_slots(
                 continue
             if rule.valid_until and current > rule.valid_until:
                 continue
-            cursor = datetime.combine(current, rule.starts_at, tzinfo=timezone.utc)
-            limit = datetime.combine(current, rule.ends_at, tzinfo=timezone.utc)
+            cursor = local_to_utc(current, rule.starts_at, timezone_name)
+            limit = local_to_utc(current, rule.ends_at, timezone_name)
             while cursor + timedelta(minutes=rule.slot_minutes) <= limit:
                 candidates[(rule.doctor_id, cursor)] = (
                     rule.unit_id,
@@ -131,8 +151,18 @@ def available_slots(
                 cursor += timedelta(minutes=rule.slot_minutes)
         current += timedelta(days=1)
     items = []
+    now = datetime.now(timezone.utc)
     for (candidate_doctor, start), (candidate_unit, end) in sorted(candidates.items(), key=lambda item: item[0][1]):
         if candidate_unit not in units:
+            continue
+        if start <= now:
+            continue
+        local_start = local_datetime(start, timezone_name)
+        if period == "morning" and local_start.hour >= 12:
+            continue
+        if period == "afternoon" and not 12 <= local_start.hour < 18:
+            continue
+        if period == "evening" and local_start.hour < 18:
             continue
         if any(
             appointment.doctor_id == candidate_doctor
@@ -155,6 +185,7 @@ def available_slots(
                 "unit": {"id": unit.id, "name": unit.name, "address": unit.address},
                 "starts_at": start,
                 "ends_at": end,
+                "timezone": timezone_name,
             }
         )
     return items
@@ -168,6 +199,7 @@ def create_patient_appointment(payload: AppointmentCreate, identity: dict, db: S
     requested = payload.starts_at
     if requested.tzinfo is None:
         requested = requested.replace(tzinfo=timezone.utc)
+    lock_appointment_slot(db, identity["tenant"], payload.doctor_id, requested)
     slots = available_slots(
         db,
         identity["tenant"],
@@ -246,6 +278,8 @@ def list_availability(
     doctor_id: str | None = None,
     specialty_id: str | None = None,
     unit_id: str | None = None,
+    insurer_id: str | None = None,
+    period: str | None = None,
     tenant_id: str = "clinic-alyvo",
     db: Session = Depends(get_db),
 ):
@@ -253,7 +287,20 @@ def list_availability(
     end = day or to_date or start + timedelta(days=14)
     if (end - start).days > 31:
         raise HTTPException(422, "Intervalo máximo de 31 dias")
-    return {"items": available_slots(db, tenant_id, start, end, doctor_id, specialty_id, unit_id), "source": "postgresql"}
+    tenant = db.get(Tenant, tenant_id)
+    timezone_name = tenant.timezone if tenant else "America/Sao_Paulo"
+    items = available_slots(
+        db, tenant_id, start, end, doctor_id, specialty_id, unit_id, insurer_id, period
+    )
+    serialized = [
+        {
+            **item,
+            "starts_at": local_datetime(item["starts_at"], timezone_name),
+            "ends_at": local_datetime(item["ends_at"], timezone_name),
+        }
+        for item in items
+    ]
+    return {"items": serialized, "source": "postgresql", "timezone": timezone_name}
 
 
 @router.post("/appointments", status_code=201)

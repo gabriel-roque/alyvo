@@ -9,8 +9,11 @@
   vetoriais, expande relações e reranqueia resultados; toda consulta filtra o tenant.
 - **Redis/Celery:** OCR, embeddings e projeção de outbox fora da requisição.
 - **MinIO:** arquivos privados de conhecimento prefixados por clínica.
-- **LangGraph:** estado e roteamento da conversa. Os nós chamam recuperação ou
-  ferramentas transacionais; as implementações de modelo ficam atrás de adapters.
+- **Orquestração tipada:** estado persistido por conversa e roteamento limitado a
+  ferramentas cadastradas. Datas, timezone e filtros são resolvidos no domínio;
+  o LLM não é fonte de verdade operacional.
+- **Ollama:** inferência 100% local em GPU NVIDIA, com modelo aquecido. Falhas do
+  modelo nunca removem filtros nem transformam uma data relativa em “hoje”.
 
 ## Fluxo de agendamento
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from app.ai.providers import embedding_provider
 from app.config import get_settings
@@ -82,8 +83,45 @@ class Neo4jKnowledgeStore:
             )
             return [GraphHit(row["content"], row["title"], row["source"], float(row["score"])) for row in rows]
 
+    def fulltext(self, tenant_id: str, question: str, limit: int = 5) -> list[GraphHit]:
+        with self.driver.session() as session:
+            rows = session.run(
+                """
+                CALL db.index.fulltext.queryNodes('knowledge_chunk_text', $question, {limit: 25})
+                YIELD node AS c, score
+                MATCH (d:Document {tenant_id: $tenant_id, status: 'published'})-[:HAS_CHUNK]->(c)
+                WHERE c.tenant_id = $tenant_id AND c.status = 'published'
+                RETURN c.content AS content, d.title AS title, d.source AS source, score
+                ORDER BY score DESC
+                LIMIT $limit
+                """,
+                tenant_id=tenant_id,
+                question=question,
+                limit=limit,
+            )
+            return [GraphHit(row["content"], row["title"], row["source"], float(row["score"])) for row in rows]
+
     def hybrid(self, tenant_id: str, question: str, limit: int = 5) -> list[GraphHit]:
-        """Vector seeds plus graph expansion, followed by deterministic reranking."""
+        """Dense and lexical retrieval combined with reciprocal-rank fusion."""
+        dense = self.vector(tenant_id, question, limit=12)
+        try:
+            lexical = self.fulltext(tenant_id, question, limit=12)
+        except Exception:
+            lexical = []
+        by_content: dict[str, GraphHit] = {}
+        scores: dict[str, float] = {}
+        for results in (dense, lexical):
+            for rank, hit in enumerate(results, start=1):
+                by_content.setdefault(hit.content, hit)
+                scores[hit.content] = scores.get(hit.content, 0.0) + 1 / (60 + rank)
+        if by_content:
+            maximum = max(scores.values()) or 1
+            return [
+                GraphHit(hit.content, hit.title, hit.source, min(0.55 + scores[content] / maximum * 0.44, 0.99))
+                for content, hit in sorted(by_content.items(), key=lambda item: scores[item[0]], reverse=True)[:limit]
+            ]
+
+        # Keep graph expansion as a resilience path while an index is being populated.
         vector = embedding_provider().embed([question])[0]
         terms = {term.strip(".,?!:;").casefold() for term in question.split() if len(term) > 3}
         with self.driver.session() as session:
@@ -119,4 +157,9 @@ class Neo4jKnowledgeStore:
                 score = min(base_score * 0.75 + lexical * 0.2 + min(entity_match, 1) * 0.05, 1.0)
                 hits.append(GraphHit(content, row["title"], row["source"], score))
         return sorted(hits, key=lambda item: item.score, reverse=True)[:limit]
+
+
+@lru_cache
+def knowledge_store() -> Neo4jKnowledgeStore:
+    return Neo4jKnowledgeStore()
 

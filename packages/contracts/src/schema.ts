@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/sessions/{session_id}/messages/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream Message */
+        post: operations["stream_message_api_v1_chat_sessions__session_id__messages_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/sessions/{session_id}/resume": {
         parameters: {
             query?: never;
@@ -1151,6 +1168,8 @@ export interface operations {
                 doctor_id?: string | null;
                 specialty_id?: string | null;
                 unit_id?: string | null;
+                insurer_id?: string | null;
+                period?: string | null;
                 tenant_id?: string;
             };
             header?: never;
@@ -1316,6 +1335,43 @@ export interface operations {
         };
     };
     post_message_api_v1_chat_sessions__session_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_message_api_v1_chat_sessions__session_id__messages_stream_post: {
         parameters: {
             query?: never;
             header?: {

@@ -27,12 +27,18 @@ def evaluate(client: httpx.Client) -> dict:
         response = client.post(f"{API}/chat/sessions/{session}/messages", json={"content": case["question"]})
         response.raise_for_status()
         result = response.json()
-        evidence = " ".join([result["answer"], *[item.get("excerpt", "") for item in result["citations"]]])
+        evidence = " ".join([
+            result["answer"],
+            *[item.get("excerpt", "") for item in result["citations"]],
+            json.dumps(result.get("tool_result") or {}, ensure_ascii=False),
+        ])
         recall = sum(normalized(term) in normalized(evidence) for term in case["expected_terms"]) / len(case["expected_terms"])
-        details.append({"question": case["question"], "expected_intent": case["intent"], "actual_intent": result["intent"], "intent_match": result["intent"] == case["intent"], "term_recall": recall, "confidence": result["confidence"]})
+        date_resolved = case.get("strategy") not in {"date", "date-range"} or bool((result.get("resolved_request") or {}).get("from"))
+        details.append({"question": case["question"], "expected_intent": case["intent"], "actual_intent": result["intent"], "intent_match": result["intent"] == case["intent"], "term_recall": recall, "date_resolved": date_resolved, "confidence": result["confidence"]})
     return {
         "intent_accuracy": sum(item["intent_match"] for item in details) / len(details),
         "term_recall": sum(item["term_recall"] for item in details) / len(details),
+        "date_accuracy": sum(item["date_resolved"] for item in details) / len(details),
         "details": details,
     }
 
@@ -40,7 +46,7 @@ def evaluate(client: httpx.Client) -> dict:
 def main() -> None:
     with httpx.Client(timeout=120) as client:
         result = evaluate(client)
-    passed = result["intent_accuracy"] >= 0.9 and result["term_recall"] >= 0.75
+    passed = result["intent_accuracy"] >= 0.95 and result["term_recall"] >= 0.85 and result["date_accuracy"] == 1.0
     report = {"status": "passed" if passed else "failed", **result}
     target = ROOT / "reports/evaluations.json"
     target.parent.mkdir(exist_ok=True)

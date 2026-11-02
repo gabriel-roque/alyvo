@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:8b"
-    ollama_timeout_seconds: float = 10
+    ollama_timeout_seconds: float = 30
+    ollama_connect_timeout_seconds: float = 3
+    ollama_context_length: int = 4096
+    ollama_keep_alive: str = "-1"
     openrouter_api_key: str = ""
     openrouter_model: str = "qwen/qwen3-8b"
     allow_external_providers: bool = False
