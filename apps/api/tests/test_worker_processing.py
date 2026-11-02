@@ -7,7 +7,7 @@ def test_structured_fields_parse_noisy_labelled_ocr(monkeypatch):
     monkeypatch.setattr(
         tasks,
         "get_settings",
-        lambda: SimpleNamespace(llm_provider="ollama"),
+        lambda: SimpleNamespace(llm_primary_provider="ollama"),
     )
 
     fields = tasks._structured_fields(
@@ -25,7 +25,11 @@ def test_structured_fields_parse_noisy_labelled_ocr(monkeypatch):
 
 
 def test_structured_fields_tolerate_common_i_l_ocr_confusion(monkeypatch):
-    monkeypatch.setattr(tasks, "get_settings", lambda: SimpleNamespace(llm_provider="ollama"))
+    monkeypatch.setattr(
+        tasks,
+        "get_settings",
+        lambda: SimpleNamespace(llm_primary_provider="ollama"),
+    )
     fields = tasks._structured_fields(
         "PAClENTE: Juliana Silva\nEXAME: Hemograma completo\nSOLIClTANTE: Dra. Ana Costa",
         "medical_order",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ from app.ai.conversation import (
 )
 from app.ai.providers import ToolCall, chat_provider
 from app.ai.retrieval import retrieve
-from app.models import Appointment, AvailabilityRule, Doctor, Insurer, Specialty, Tenant, Unit
+from app.models import Appointment, AvailabilityRule, Doctor, Exam, Insurer, Specialty, Tenant, Unit
 from app.observability import record
 from app.routers.operations import available_slots
 
@@ -33,6 +33,38 @@ Não ofereça diagnóstico, prescrição ou triagem. Ações pessoais podem exig
 Quando não entender, peça uma informação específica em vez de adivinhar."""
 
 TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "list_insurers",
+            "description": "Lista os convênios e planos cadastrados pela clínica.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_exams",
+            "description": "Lista exames e procedimentos cadastrados pela clínica.",
+            "parameters": {"type": "object", "properties": {"unit": {"type": "string"}}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_specialties",
+            "description": "Lista especialidades ativas.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_units",
+            "description": "Lista unidades e endereços da clínica.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -261,6 +293,89 @@ def execute_tool(db: Session, tenant_id: str, identity: dict | None, name: str, 
     if name not in ALLOWED_TOOLS:
         return _base("Não consegui executar essa solicitação com segurança.", "unknown", confidence=0.0)
     try:
+        if name == "list_insurers":
+            items = db.scalars(
+                select(Insurer)
+                .where(Insurer.tenant_id == tenant_id, Insurer.active.is_(True))
+                .order_by(Insurer.name)
+            ).all()
+            names = ", ".join(item.name for item in items)
+            return _base(
+                f"Atendemos {names}." if items else "Não encontrei convênios ativos cadastrados.",
+                name,
+                tool_result={
+                    "type": "insurers",
+                    "items": [{"id": item.id, "name": item.name} for item in items],
+                },
+                confidence=1.0 if items else 0.0,
+            )
+        if name == "list_exams":
+            query = select(Exam).where(Exam.tenant_id == tenant_id, Exam.active.is_(True))
+            unit_name = arguments.get("unit")
+            unit_id = _find_id(db, Unit, tenant_id, unit_name)
+            exams = db.scalars(query.order_by(Exam.name)).all()
+            units = {
+                item.id: item
+                for item in db.scalars(
+                    select(Unit).where(Unit.tenant_id == tenant_id, Unit.active.is_(True))
+                )
+            }
+            rows = []
+            for exam in exams:
+                exam_unit_ids = list(getattr(exam, "unit_ids", []) or [])
+                if unit_name and (not unit_id or unit_id not in exam_unit_ids):
+                    continue
+                rows.append({
+                    "id": exam.id,
+                    "name": exam.name,
+                    "units": [
+                        {"id": item_id, "name": units[item_id].name}
+                        for item_id in exam_unit_ids
+                        if item_id in units
+                    ],
+                })
+            names = ", ".join(item["name"] for item in rows)
+            return _base(
+                f"Realizamos {names}." if rows else "Não encontrei exames ativos com esses critérios.",
+                name,
+                tool_result={"type": "exams", "items": rows},
+                confidence=1.0 if rows else 0.0,
+            )
+        if name == "list_specialties":
+            items = db.scalars(
+                select(Specialty)
+                .where(Specialty.tenant_id == tenant_id, Specialty.active.is_(True))
+                .order_by(Specialty.name)
+            ).all()
+            return _base(
+                f"Temos atendimento em {', '.join(item.name for item in items)}."
+                if items else "Não encontrei especialidades ativas.",
+                name,
+                tool_result={
+                    "type": "specialties",
+                    "items": [{"id": item.id, "name": item.name} for item in items],
+                },
+                confidence=1.0 if items else 0.0,
+            )
+        if name == "list_units":
+            items = db.scalars(
+                select(Unit)
+                .where(Unit.tenant_id == tenant_id, Unit.active.is_(True))
+                .order_by(Unit.name)
+            ).all()
+            return _base(
+                f"Nossas unidades são: {', '.join(item.name for item in items)}."
+                if items else "Não encontrei unidades ativas.",
+                name,
+                tool_result={
+                    "type": "units",
+                    "items": [
+                        {"id": item.id, "name": item.name, "address": item.address}
+                        for item in items
+                    ],
+                },
+                confidence=1.0 if items else 0.0,
+            )
         if name == "search_directory":
             return _directory(db, tenant_id, arguments)
         if name == "search_knowledge":
@@ -473,18 +588,6 @@ def execute_tool(db: Session, tenant_id: str, identity: dict | None, name: str, 
     return _base("Não consegui executar essa solicitação.", "unknown", confidence=0.0)
 
 
-def _greeting(message: str) -> str | None:
-    return {
-        "oi": "Olá! Como posso ajudar você hoje?",
-        "ola": "Olá! Como posso ajudar você hoje?",
-        "bom dia": "Bom dia! Como posso ajudar você hoje?",
-        "boa tarde": "Boa tarde! Como posso ajudar você hoje?",
-        "boa noite": "Boa noite! Como posso ajudar você hoje?",
-        "oi tudo bem": "Olá! Tudo bem por aqui. Como posso ajudar você?",
-        "ola tudo bem": "Olá! Tudo bem por aqui. Como posso ajudar você?",
-    }.get(normalized_text(message))
-
-
 def _schedule_information(db: Session, tenant_id: str, message: str) -> dict | None:
     text = normalized_text(message)
     if any(term in text for term in ("feriado", "sabado", "domingo", "fim de semana")):
@@ -513,39 +616,9 @@ def _schedule_information(db: Session, tenant_id: str, message: str) -> dict | N
     return _base(". ".join(parts) + ".", "schedule_information")
 
 
-def _deterministic_call(message: str, state: DialogState) -> ToolCall | None:
-    text = normalized_text(message)
-    date_window = resolve_date_window(message)
-    if any(term in text for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")):
-        return ToolCall("list_my_appointments", {"status": "confirmed"})
-    if any(term in text for term in ("cancelar", "desmarcar")):
-        return ToolCall("list_my_appointments", {"status": "confirmed"})
-    if any(term in text for term in ("onde fica", "endereco", "localizacao")) and any(
-        term in text for term in ("unidade", "centro", "sul", "clinica")
-    ):
-        return ToolCall("search_directory", {"include_address": True})
-    scheduling = any(term in text for term in (
-        "agendar", "marcar", "marca consulta", "horario", "orario", "disponibilidade", "agenda"
-    )) or (
-        date_window is not None
-        and any(term in text for term in ("consulta", "cardiolog", "cardeolog", "pediatr", "medico", "doutor", "dra"))
-    )
-    is_refinement = state.active_intent == "search_availability" and (
-        date_window is not None
-        or period_from_message(message) is not None
-        or any(term in text for term in ("unidade", "unid", "centro", "sul", "medico", "doutor", "convenio", "mais horarios", "cardeolog"))
-    )
-    if scheduling or is_refinement:
-        return ToolCall("search_availability", {})
-    directory_terms = ("medico", "doutor", "dra", "cardiolog", "cardeolog", "pediatr", "convenio", "aceita", "profissional")
-    knowledge_qualifiers = ("dura", "duracao", "documento", "preparo", "preparacao", "politica")
-    if any(term in text for term in directory_terms) and not any(term in text for term in knowledge_qualifiers):
-        return ToolCall("search_directory", {})
-    return None
-
-
 def _match_catalog(db: Session, tenant_id: str, message: str, arguments: dict) -> dict:
     text = normalized_text(message)
+    text_tokens = set(text.split())
     enriched = dict(arguments)
     for model, key in ((Doctor, "doctor"), (Specialty, "specialty"), (Unit, "unit"), (Insurer, "insurer")):
         for item in db.scalars(select(model).where(model.tenant_id == tenant_id)).all():
@@ -556,7 +629,9 @@ def _match_catalog(db: Session, tenant_id: str, message: str, arguments: dict) -
                 for token in candidate.split()
                 if len(token) >= minimum_length and token not in {"doutora", "doutor", "unidade"}
             ]
-            token_match = model in {Doctor, Unit} and any(token in text for token in identifying_tokens)
+            token_match = model in {Doctor, Unit} and any(
+                token in text_tokens for token in identifying_tokens
+            )
             if candidate in text or token_match:
                 enriched[key] = item.name
                 break
@@ -620,84 +695,16 @@ def run_workflow(
     message: str,
     history: list[dict] | None = None,
     session_state: dict | None = None,
+    thread_id: str = "anonymous",
 ) -> dict:
-    try:
-        state = DialogState.model_validate(dict((session_state or {}).get("dialog") or {}))
-    except ValidationError:
-        state = DialogState()
-    greeting = _greeting(message)
-    if greeting:
-        result = _base(
-            greeting,
-            "conversation",
-            suggestions=[
-                {"label": "Ver horários", "message": "Quero ver horários disponíveis"},
-                {"label": "Encontrar médico", "message": "Quais médicos atendem na clínica?"},
-            ],
-        )
-        result["dialog_state"] = state.model_dump(mode="json")
-        return result
-    schedule_information = _schedule_information(db, tenant_id, message)
-    if schedule_information:
-        schedule_information["dialog_state"] = state.model_dump(mode="json")
-        return schedule_information
-    lowered = normalized_text(message)
-    if any(term in lowered for term in ("diagnostico", "prescreva", "receita medica", "qual doenca", "dor no peito")):
-        result = _base(
-            "Posso ajudar somente com informações administrativas. Não faço diagnóstico, prescrição ou triagem. Se houver uma emergência, procure o serviço de urgência da sua região.",
-            "clinical_safety",
-        )
-        result["dialog_state"] = state.model_dump(mode="json")
-        return result
-    call = _deterministic_call(message, state)
-    if call is None:
-        today = tenant_today(_timezone(db, tenant_id)).isoformat()
-        turn = chat_provider().respond(
-            [
-                {"role": "system", "content": f"{SYSTEM_PROMPT}\nData local atual: {today}."},
-                *(history or []),
-                {"role": "user", "content": message},
-            ],
-            TOOLS,
-        )
-        call = turn.tool_calls[0] if turn.tool_calls else None
-        if call is None:
-            result = _base(
-                turn.content or "Posso ajudar com agenda, profissionais e informações administrativas da clínica.",
-                "conversation",
-            )
-            result["dialog_state"] = state.model_dump(mode="json")
-            return result
-    call, state = _merge_state(db, tenant_id, message, call, state)
-    if call.name == "search_availability" and not call.arguments.get("from"):
-        result = _base(
-            "Para qual dia você quer ver os horários?",
-            call.name,
-            suggestions=[
-                {"label": "Hoje", "message": "Hoje"},
-                {"label": "Amanhã", "message": "Amanhã"},
-                {"label": "Sexta-feira", "message": "Na sexta-feira"},
-            ],
-            resolved_request={
-                key: value
-                for key, value in call.arguments.items()
-                if key in {"specialty", "doctor", "unit", "insurer", "period"} and value
-            },
-        )
-        result["dialog_state"] = state.model_dump(mode="json")
-        return result
-    try:
-        result = execute_tool(db, tenant_id, identity, call.name, call.arguments)
-    except ValidationError:
-        state.recovery_attempts += 1
-        result = _base(
-            "Entendi a ideia, mas preciso de um detalhe para continuar. Qual data, profissional ou especialidade você prefere?",
-            call.name,
-            confidence=0.0,
-            suggestions=[{"label": "Próxima sexta", "message": "Na próxima sexta-feira"}],
-        )
-    tool_result = result.get("tool_result") or {}
-    if tool_result.get("items"):
-        state.last_options = tool_result["items"][:12]
-    result["dialog_state"] = state.model_dump(mode="json")
-    return result
+    from app.ai.graph import run_graph
+
+    return run_graph(
+        db,
+        tenant_id,
+        identity,
+        message,
+        history,
+        session_state,
+        thread_id,
+    )

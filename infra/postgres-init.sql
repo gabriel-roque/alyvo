@@ -8,6 +8,21 @@ BEGIN
 END
 $$;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'alyvo_graph') THEN
+    CREATE ROLE alyvo_graph LOGIN PASSWORD 'alyvo-graph';
+  ELSE
+    ALTER ROLE alyvo_graph WITH LOGIN PASSWORD 'alyvo-graph' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+  END IF;
+END
+$$;
+
+CREATE SCHEMA IF NOT EXISTS langgraph AUTHORIZATION alyvo_graph;
+ALTER SCHEMA langgraph OWNER TO alyvo_graph;
+GRANT CONNECT ON DATABASE alyvo TO alyvo_graph;
+GRANT USAGE, CREATE ON SCHEMA langgraph TO alyvo_graph;
+
 GRANT CONNECT ON DATABASE alyvo TO alyvo_app;
 GRANT USAGE ON SCHEMA public TO alyvo_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO alyvo_app;

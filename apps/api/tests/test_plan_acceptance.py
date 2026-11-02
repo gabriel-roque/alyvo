@@ -3,7 +3,7 @@ from app.models import OutboxEvent
 from sqlalchemy import select
 
 
-def test_tool_confirmation_stores_server_side_arguments(client, patient_token):
+def test_tool_confirmation_uses_checkpoint_and_cannot_be_replayed(client, patient_token):
     headers = {"Authorization": f"Bearer {patient_token}"}
     slot = client.get("/api/v1/availability").json()["items"][0]
     session_id = client.post("/api/v1/chat/sessions", headers=headers, json={}).json()["id"]
@@ -13,6 +13,8 @@ def test_tool_confirmation_stores_server_side_arguments(client, patient_token):
     completed = client.post(f"/api/v1/chat/sessions/{session_id}/confirmations/{confirmation['id']}", headers=headers, json={"accepted": True})
     assert completed.status_code == 200
     assert completed.json()["tool_result"]["type"] == "appointment_created"
+    replay = client.post(f"/api/v1/chat/sessions/{session_id}/confirmations/{confirmation['id']}", headers=headers, json={"accepted": True})
+    assert replay.status_code == 404
 
 
 def test_catalog_archive_preserves_outbox(client, admin_token):

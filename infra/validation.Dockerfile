@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     && python3 -m pip install --break-system-packages -r api-requirements.txt \
        'pytest>=8.2,<9' 'pytest-asyncio>=0.23,<1' 'pytest-cov>=5,<8' \
        'ruff>=0.5,<1' 'ragas>=0.4,<0.5' 'openai>=1,<3' \
-       'langchain-community>=0.3.27,<0.4' 'rapidfuzz>=3,<4'
+       'rapidfuzz>=3,<4'
 
 COPY pyproject.toml ./
 COPY apps/api ./apps/api

@@ -256,7 +256,6 @@ class ChatSession(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     patient_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
-    state: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: utcnow() + timedelta(hours=2)

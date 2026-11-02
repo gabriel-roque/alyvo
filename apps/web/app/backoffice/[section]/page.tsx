@@ -3,7 +3,6 @@
 import { Archive, Check, ChevronRight, Pencil, Plus, Search, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Sidebar } from "@/components/sidebar";
 import { backofficeGet, backofficeMutate } from "@/lib/api";
 
 type Item = Record<string, unknown> & { id: string; name?: string; active?: boolean };
@@ -139,9 +138,8 @@ export default function BackofficeSectionPage() {
   }
 
   return (
-    <main className="backoffice-shell">
-      <Sidebar active={definition.title} />
-      <section className="backoffice-main">
+    <>
+      <section>
         <header className="resource-heading">
           <div><p className="eyebrow">{section === "pacientes" ? "Operação" : "Cadastros"}</p><h1>{definition.title}</h1><p>{definition.description}</p></div>
           {section !== "pacientes" && <button className="button button-primary" onClick={() => open()}><Plus /> Novo cadastro</button>}
@@ -177,6 +175,6 @@ export default function BackofficeSectionPage() {
       </aside></div>}
 
       {archive && <div className="dialog-backdrop"><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="archive-title"><span className="danger-icon"><Archive /></span><h2 id="archive-title">Arquivar {archive.name}?</h2><p>O registro deixará de aparecer nos fluxos ativos, mas o histórico será preservado.</p><div><button className="button button-secondary" onClick={() => setArchive(null)}>Cancelar</button><button className="button button-danger" disabled={saving} onClick={() => void confirmArchive()}>Arquivar</button></div></section></div>}
-    </main>
+    </>
   );
 }

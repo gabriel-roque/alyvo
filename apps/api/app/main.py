@@ -25,6 +25,12 @@ async def lifespan(_: FastAPI):
     apply_migrations()
     with AdminSessionLocal() as db:
         ensure_seeded(db)
+    # Checkpoint migrations include concurrent indexes and must finish before
+    # request transactions are accepted, otherwise PostgreSQL correctly waits
+    # for those transactions and the first chat request can stall.
+    from app.ai.checkpoints import checkpointer
+
+    checkpointer()
     # Readiness is only published after the local inference stack and pooled
     # graph connection are warm. This moves the one-time model cost out of the
     # patient's first conversation.
@@ -36,7 +42,7 @@ async def lifespan(_: FastAPI):
         embedding_provider().embed(["aquecimento da busca institucional"])
         if settings.app_env != "test":
             knowledge_store().driver.verify_connectivity()
-        if settings.llm_provider == "ollama":
+        if settings.llm_primary_provider == "ollama":
             chat_provider().complete("Responda apenas OK.", ["Aquecimento interno sem dados pessoais."])
 
     try:
@@ -47,6 +53,9 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
+        from app.ai.checkpoints import close_checkpointer
+
+        close_checkpointer()
         if settings.app_env != "test":
             knowledge_store().close()
             provider = chat_provider()
@@ -128,7 +137,10 @@ def health():
         "database": database,
         "environment": get_settings().app_env,
         "providers": {
-            "llm": get_settings().llm_provider,
+            "llm_primary": get_settings().llm_primary_provider,
+            "llm_fallback": get_settings().llm_fallback_provider,
+            "openrouter": "configured" if get_settings().openrouter_api_key else "unconfigured",
+            "langsmith": "enabled" if get_settings().langsmith_tracing else "disabled",
             "embedding": get_settings().embedding_provider,
             "ocr": get_settings().ocr_provider,
         },
@@ -143,6 +155,8 @@ def deep_health():
         "neo4j": "ok",
         "minio": "ok",
         "ollama": "ok",
+        "openrouter": "unconfigured",
+        "langsmith": "enabled" if get_settings().langsmith_tracing else "disabled",
     }
     try:
         with engine.connect() as connection:
@@ -169,7 +183,10 @@ def deep_health():
         object_storage_provider()
     except Exception:
         services["minio"] = "unavailable"
-    if get_settings().llm_provider == "ollama":
+    if "ollama" in {
+        get_settings().llm_primary_provider,
+        get_settings().llm_fallback_provider,
+    }:
         try:
             response = httpx.get(f"{get_settings().ollama_base_url}/api/tags", timeout=3)
             response.raise_for_status()
@@ -186,9 +203,27 @@ def deep_health():
                 services["ollama_acceleration"] = "gpu" if size and size_vram / size >= 0.95 else "partial_or_cpu"
         except Exception:
             services["ollama"] = "unavailable"
-    required = ("postgres", "redis", "neo4j", "minio", "ollama")
-    status = "ok" if all(services[value] == "ok" for value in required) else "degraded"
-    return JSONResponse({"status": status, "services": services}, status_code=200 if status == "ok" else 503)
+    if get_settings().openrouter_api_key and get_settings().allow_external_providers:
+        try:
+            response = httpx.get(
+                f"{get_settings().openrouter_base_url}/models",
+                headers={"Authorization": f"Bearer {get_settings().openrouter_api_key}"},
+                timeout=3,
+            )
+            response.raise_for_status()
+            services["openrouter"] = "ok"
+        except Exception:
+            services["openrouter"] = "unavailable"
+    infrastructure = ("postgres", "redis", "neo4j", "minio")
+    infrastructure_ok = all(services[value] == "ok" for value in infrastructure)
+    model_available = services["openrouter"] == "ok" or services["ollama"] == "ok"
+    primary = get_settings().llm_primary_provider
+    primary_ok = services.get(primary) == "ok"
+    status = "ok" if infrastructure_ok and primary_ok else "degraded"
+    return JSONResponse(
+        {"status": status, "services": services, "model_available": model_available},
+        status_code=200 if infrastructure_ok and model_available else 503,
+    )
 
 
 @app.get("/api/v1/meta", tags=["system"])

@@ -36,7 +36,7 @@ def seed_demo(db: Session) -> None:
     center = Unit(tenant_id=primary.id, name="Unidade Centro", address="Rua das Acácias, 320 — São Paulo, SP")
     south = Unit(tenant_id=primary.id, name="Unidade Sul", address="Av. das Flores, 840 — São Paulo, SP")
     vida = Insurer(tenant_id=primary.id, name="Vida+")
-    amil = Insurer(tenant_id=primary.id, name="Amil")
+    amil = Insurer(tenant_id=primary.id, name="UNIMED")
     db.add_all([cardiology, pediatrics, center, south, vida, amil])
     db.flush()
 
@@ -104,9 +104,9 @@ def seed_demo(db: Session) -> None:
                 tenant_id=primary.id,
                 title="Guia de convênios e unidades 2026",
                 source="Base institucional aprovada",
-                content="A Clínica Alyvo aceita Vida+ e Amil. A Unidade Centro fica na Rua das Acácias, 320. Consultas de cardiologia duram 30 minutos.",
+                content="A Clínica Alyvo aceita Vida+ e UNIMED. A Unidade Centro fica na Rua das Acácias, 320. Consultas de cardiologia duram 30 minutos.",
                 status=DocumentStatus.published,
-                entities=["Vida+", "Amil", "Unidade Centro", "Cardiologia"],
+                entities=["Vida+", "UNIMED", "Unidade Centro", "Cardiologia"],
             ),
             KnowledgeDocument(
                 tenant_id=primary.id,

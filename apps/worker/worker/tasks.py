@@ -23,7 +23,7 @@ from app.models import (
     Tenant,
     Unit,
 )
-from app.observability import correlation_id_context, operation, record
+from app.observability import correlation_id_context, record
 from sqlalchemy import select
 
 from worker.celery_app import celery_app
@@ -65,22 +65,6 @@ def project_outbox(limit: int = 100, request_id: str = "background") -> dict:
     return {"processed": processed}
 
 
-@celery_app.task(name="worker.tasks.extract_document")
-def extract_document(content_hex: str, filename: str, request_id: str = "background") -> dict:
-    correlation_id_context.set(request_id)
-    with operation("ocr.extract", filename=filename):
-        result = ocr_provider().extract(bytes.fromhex(content_hex), filename)
-    return {"raw_text": result.raw_text, "fields": result.fields, "confidence": result.confidence}
-
-
-@celery_app.task(name="worker.tasks.embed_chunks")
-def embed_chunks(chunks: list[str], request_id: str = "background") -> dict:
-    correlation_id_context.set(request_id)
-    with operation("embedding.batch", count=len(chunks)):
-        vectors = embedding_provider().embed(chunks)
-    return {"count": len(vectors), "dimensions": len(vectors[0]) if vectors else 0, "vectors": vectors}
-
-
 def _text_from_file(content: bytes, filename: str) -> str:
     lowered = filename.lower()
     if lowered.endswith(".txt") or lowered.endswith(".md"):
@@ -107,7 +91,7 @@ def _chunks(text: str, size: int = 700, overlap: int = 100) -> list[str]:
 
 
 def _structured_fields(raw_text: str, kind: str, fallback: dict) -> dict:
-    if get_settings().llm_provider == "mock" or set(fallback) != {"texto"}:
+    if get_settings().llm_primary_provider == "mock" or set(fallback) != {"texto"}:
         return fallback
     schemas = {
         "identity": ["nome", "cpf", "documento"],

@@ -9,14 +9,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.graph import consume_pending_tool, resume_action_graph, start_action_graph
 from app.ai.workflow import execute_tool, run_workflow
 from app.db import get_db
 from app.models import ChatMessage, ChatSession
-from app.routers.operations import (
-    AppointmentCreate,
-    cancel_patient_appointment,
-    create_patient_appointment,
-)
 from app.security import optional_identity
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -51,21 +47,7 @@ def get_session(db: Session, session_id: str, identity: dict | None = None) -> C
 
 
 def save_response(db: Session, session: ChatSession, result: dict) -> dict:
-    state = dict(session.state or {})
-    if result.get("dialog_state"):
-        state["dialog"] = result.pop("dialog_state")
-    if result.get("pending_tool"):
-        state["pending_tool"] = result["pending_tool"]
-    confirmation = result.get("confirmation_request")
-    if confirmation:
-        confirmation_id = secrets.token_urlsafe(18)
-        state["confirmation"] = {"id": confirmation_id, **confirmation}
-        result["confirmation_request"] = {
-            "id": confirmation_id,
-            "tool": confirmation["tool"],
-            "summary": confirmation.get("summary", "Confirme para concluir esta operação."),
-        }
-    session.state = state
+    result.pop("dialog_state", None)
     assistant = ChatMessage(
         tenant_id=session.tenant_id,
         session_id=session.id,
@@ -114,7 +96,9 @@ def post_message(session_id: str, payload: MessageCreate, identity: dict | None 
     ).all()
     history = [{"role": item.role, "content": item.content} for item in reversed(previous)]
     db.add(ChatMessage(tenant_id=session.tenant_id, session_id=session.id, role="user", content=payload.content))
-    result = run_workflow(db, session.tenant_id, identity, payload.content, history, session.state)
+    result = run_workflow(
+        db, session.tenant_id, identity, payload.content, history, None, session.id
+    )
     return save_response(db, session, result)
 
 
@@ -139,7 +123,9 @@ def stream_message(
         ).all()
         history = [{"role": item.role, "content": item.content} for item in reversed(previous)]
         db.add(ChatMessage(tenant_id=session.tenant_id, session_id=session.id, role="user", content=payload.content))
-        result = run_workflow(db, session.tenant_id, identity, payload.content, history, session.state)
+        result = run_workflow(
+            db, session.tenant_id, identity, payload.content, history, None, session.id
+        )
         saved = save_response(db, session, result)
         words = saved["answer"].split(" ")
         for index, word in enumerate(words):
@@ -157,14 +143,11 @@ def stream_message(
 @router.post("/sessions/{session_id}/resume")
 def resume(session_id: str, identity: dict | None = Depends(optional_identity), db: Session = Depends(get_db)):
     session = get_session(db, session_id, identity)
-    pending = dict(session.state or {}).get("pending_tool")
-    if not pending:
-        raise HTTPException(409, "Não há operação pendente")
     if not identity or identity.get("role") != "patient":
         raise HTTPException(401, "Identificação necessária")
-    state = dict(session.state or {})
-    state.pop("pending_tool", None)
-    session.state = state
+    pending = consume_pending_tool(session.id)
+    if not pending:
+        raise HTTPException(409, "Não há operação pendente")
     result = execute_tool(db, session.tenant_id, identity, pending["name"], pending.get("arguments", {}))
     return save_response(db, session, result)
 
@@ -174,35 +157,32 @@ def request_action(session_id: str, payload: ActionCreate, identity: dict | None
     session = get_session(db, session_id, identity)
     if payload.tool not in {"create_appointment", "cancel_appointment"}:
         raise HTTPException(422, "Ação não permitida")
-    result = execute_tool(db, session.tenant_id, identity, payload.tool, payload.arguments)
+    result = start_action_graph(
+        db,
+        session.tenant_id,
+        identity,
+        payload.tool,
+        payload.arguments,
+        session.id,
+        secrets.token_urlsafe(18),
+    )
     return save_response(db, session, result)
 
 
 @router.post("/sessions/{session_id}/confirmations/{confirmation_id}")
 def confirm_action(session_id: str, confirmation_id: str, payload: ConfirmationBody, identity: dict | None = Depends(optional_identity), db: Session = Depends(get_db)):
     session = get_session(db, session_id, identity)
-    confirmation = dict(session.state or {}).get("confirmation")
-    if not confirmation or confirmation.get("id") != confirmation_id:
-        raise HTTPException(404, "Confirmação expirada")
-    state = dict(session.state or {})
-    state.pop("confirmation", None)
-    session.state = state
-    if not payload.accepted:
-        answer = (
-            "O cancelamento foi interrompido. Sua consulta continua confirmada."
-            if confirmation["tool"] == "cancel_appointment"
-            else "O agendamento não foi concluído."
-        )
-        return save_response(db, session, {"answer": answer, "intent": confirmation["tool"], "confidence": 1.0, "citations": [], "tool_result": None, "tool_call": {"name": confirmation["tool"]}})
     if not identity or identity.get("role") != "patient":
         raise HTTPException(401, "Identificação necessária")
-    if confirmation["tool"] == "create_appointment":
-        args = confirmation["arguments"]
-        result = create_patient_appointment(AppointmentCreate(doctor_id=args["doctor_id"], starts_at=args["starts_at"], reason=args.get("reason", "Consulta"), confirmed=True), identity, db)
-        tool_result = {"type": "appointment_created", "appointment": result}
-        answer = "Consulta agendada com sucesso."
-    else:
-        result = cancel_patient_appointment(confirmation["arguments"]["appointment_id"], identity, db)
-        tool_result = {"type": "appointment_cancelled", "appointment": result}
-        answer = "Consulta cancelada com sucesso."
-    return save_response(db, session, {"answer": answer, "intent": confirmation["tool"], "confidence": 1.0, "citations": [], "tool_result": tool_result, "tool_call": {"name": confirmation["tool"]}})
+    try:
+        result = resume_action_graph(
+            db,
+            session.tenant_id,
+            identity,
+            session.id,
+            confirmation_id,
+            payload.accepted,
+        )
+    except ValueError as exc:
+        raise HTTPException(404, "Confirmação expirada") from exc
+    return save_response(db, session, result)

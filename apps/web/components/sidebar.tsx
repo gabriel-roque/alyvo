@@ -2,6 +2,7 @@
 
 import { Activity, BookOpen, Building2, CalendarDays, ChevronLeft, CreditCard, LayoutDashboard, LogOut, Stethoscope, TestTube2, Users } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Brand } from "./brand";
 
 const groups = [
@@ -29,10 +30,22 @@ const groups = [
   },
 ] as const;
 
-export function Sidebar({ active }: { active: string }) {
+export function Sidebar() {
+  const pathname = usePathname();
+  const active = pathname === "/backoffice" ? "Visão geral"
+    : pathname === "/backoffice/agenda" ? "Agenda"
+      : pathname === "/backoffice/pacientes" ? "Pacientes"
+        : pathname === "/backoffice/medicos" ? "Médicos"
+          : pathname === "/backoffice/especialidades" ? "Especialidades"
+            : pathname === "/backoffice/convenios" ? "Convênios"
+              : pathname === "/backoffice/exames" ? "Exames"
+                : pathname === "/backoffice/unidades" ? "Unidades"
+                  : pathname === "/backoffice/conhecimento" ? "Conhecimento"
+                    : "";
+
   return (
     <aside className="backoffice-sidebar">
-      <div className="sidebar-brand"><Brand /><Link href="/" aria-label="Voltar ao site"><ChevronLeft /></Link></div>
+      <div className="sidebar-brand"><Brand /><Link className="sidebar-back-link" href="/" aria-label="Voltar ao site"><ChevronLeft /></Link></div>
       <nav aria-label="Navegação do backoffice">
         {groups.map((group) => (
           <section key={group.label}>

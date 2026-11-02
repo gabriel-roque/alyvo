@@ -9,11 +9,14 @@
   vetoriais, expande relações e reranqueia resultados; toda consulta filtra o tenant.
 - **Redis/Celery:** OCR, embeddings e projeção de outbox fora da requisição.
 - **MinIO:** arquivos privados de conhecimento prefixados por clínica.
-- **Orquestração tipada:** estado persistido por conversa e roteamento limitado a
-  ferramentas cadastradas. Datas, timezone e filtros são resolvidos no domínio;
-  o LLM não é fonte de verdade operacional.
-- **Ollama:** inferência 100% local em GPU NVIDIA, com modelo aquecido. Falhas do
-  modelo nunca removem filtros nem transformam uma data relativa em “hoje”.
+- **LangGraph:** grafo tipado dentro do FastAPI, com nós separados para
+  normalização, classificação, roteamento, ferramentas e validação. Checkpoints
+  ficam no schema PostgreSQL `langgraph`, usando `ChatSession.id` como thread.
+- **LangChain:** interface comum de modelos e ferramentas. OpenRouter é o
+  primário e Ollama local é o fallback para timeout, rate limit e falhas do
+  provedor. O LLM nunca é fonte de verdade operacional.
+- **LangSmith:** tracing e avaliação opcionais. O conteúdo é desidentificado e
+  fluxos autenticados/sensíveis expõem somente metadados seguros.
 
 ## Fluxo de agendamento
 
@@ -55,4 +58,8 @@ para produzir erro `409` compreensível.
 - uploads validados por tipo/tamanho e chaves privadas;
 - contexto recuperado é marcado como dado, nunca como instrução;
 - respostas clínicas são recusadas no roteador antes da recuperação.
+- catálogos operacionais possuem ferramentas distintas; uma consulta de
+  convênio ou exame nunca é convertida implicitamente em busca de médicos;
+- CPF, datas de nascimento, e-mail e tokens são removidos antes de tracing ou
+  chamadas externas.
 

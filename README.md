@@ -17,9 +17,11 @@ bash scripts/gpu-preflight.sh
 docker compose up --build
 ```
 
-Na primeira execução, o Compose baixa o `qwen3:8b-q4_K_M` e o BGE-M3. O Ollama
-mantém o modelo aquecido, com contexto de 4.096 tokens, Flash Attention e cache KV
-quantizado. Quando os
+Na primeira execução, o Compose baixa o `qwen3:8b-q4_K_M` e o BGE-M3. Configure
+`OPENROUTER_API_KEY` e `OPENROUTER_MODEL` para usar o OpenRouter como provedor
+primário. Se ele estiver indisponível ou não configurado, o LangChain usa o
+Ollama local como fallback. O Ollama mantém o modelo aquecido, com contexto de
+4.096 tokens, Flash Attention e cache KV quantizado. Quando os
 serviços estiverem saudáveis:
 
 - aplicação: `http://localhost:3000`
@@ -58,8 +60,10 @@ O relatório fica em `reports/performance.json`.
 ## Componentes
 
 ```text
-Next.js ─► FastAPI ─► Tool calling + RAG ─► Ollama
-                ├──► PostgreSQL (operações e outbox)
+Next.js ─► FastAPI ─► LangGraph ─► LangChain ─► OpenRouter
+                │          │             └──► Ollama (fallback)
+                │          └──► LangSmith (traces desidentificados, opcional)
+                ├──► PostgreSQL (operações, checkpoints e outbox)
                 ├──► Redis/Celery ─► PaddleOCR + BGE-M3
                 ├──► MinIO (arquivos privados)
                 └──► Neo4j (grafo e vetores)
@@ -68,5 +72,10 @@ Next.js ─► FastAPI ─► Tool calling + RAG ─► Ollama
 O PostgreSQL é a fonte de verdade. O worker projeta no Neo4j somente dados e
 documentos institucionais aprovados. O frontend usa os contratos gerados em
 `packages/contracts`.
+
+O tracing externo fica desligado por padrão. Para ativá-lo, configure
+`LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` e `LANGSMITH_PROJECT`. Entradas são
+desidentificadas antes de entrar no grafo e fluxos sensíveis registram apenas
+metadados operacionais.
 
 Detalhes: [arquitetura](docs/ARCHITECTURE.md) e [roteiro de demonstração](docs/DEMO.md).

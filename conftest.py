@@ -9,7 +9,7 @@ if TEST_DB.exists():
     TEST_DB.unlink()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 os.environ["APP_ENV"] = "test"
-os.environ["LLM_PROVIDER"] = "mock"
+os.environ["LLM_PRIMARY_PROVIDER"] = "mock"
 os.environ["OCR_PROVIDER"] = "mock"
 
 from app.main import app  # noqa: E402

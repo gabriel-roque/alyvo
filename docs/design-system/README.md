@@ -71,11 +71,6 @@ As imagens abaixo são referências direcionais para composição, hierarquia e 
 | Arquivo | Descrição |
 | --- | --- |
 | [00-design-system-editorial-premium.png](references/00-design-system-editorial-premium.png) | Visão geral do sistema, com paleta, tipografia, espaçamento e componentes-base. |
-| [01-home-publica.png](references/01-home-publica.png) | Direção da home pública, hierarquia editorial, hero e entrada discreta para o chat. |
-| [02-chat-rag-graphrag.png](references/02-chat-rag-graphrag.png) | Conversa administrativa com respostas fundamentadas, fontes e recuperação RAG/GraphRAG. |
-| [03-agendamento.png](references/03-agendamento.png) | Fluxo de seleção de disponibilidade, resumo e confirmação de agendamento. |
-| [05-backoffice-agenda.png](references/05-backoffice-agenda.png) | Agenda do back office com foco operacional, filtros e leitura clara dos estados. |
-| [06-ingestao-graphrag.png](references/06-ingestao-graphrag.png) | Ingestão institucional, revisão e publicação controlada no GraphRAG. |
 
 ## Checklist de consistência
 

@@ -115,6 +115,33 @@ def resolve_date_window(
             target = today + timedelta(days=offset)
             return DateWindow(start=target, end=target, source=phrase)
 
+    day_of_month = re.search(
+        r"\b(?:dia\s+)?(\d{1,2})\s+(?:deste|desse|do)\s+(mes|proximo mes)\b",
+        text,
+    )
+    if day_of_month:
+        day = int(day_of_month.group(1))
+        month_offset = 1 if "proximo" in day_of_month.group(2) else 0
+        year = today.year + ((today.month + month_offset - 1) // 12)
+        month = ((today.month + month_offset - 1) % 12) + 1
+        try:
+            target = date(year, month, day)
+        except ValueError:
+            return None
+        return DateWindow(start=target, end=target, source=day_of_month.group(0))
+
+    if "mes que vem" in text or "proximo mes" in text:
+        year = today.year + (today.month // 12)
+        month = (today.month % 12) + 1
+        start = date(year, month, 1)
+        following_year = year + (month // 12)
+        following_month = (month % 12) + 1
+        return DateWindow(
+            start=start,
+            end=date(following_year, following_month, 1) - timedelta(days=1),
+            source="proximo mes",
+        )
+
     numeric = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", text)
     if numeric:
         day, month = int(numeric.group(1)), int(numeric.group(2))

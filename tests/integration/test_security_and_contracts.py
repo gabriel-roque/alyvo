@@ -1,4 +1,4 @@
-from app.ai.providers import ChatModelProvider, DeterministicChatProvider, OpenRouterChatProvider
+from app.ai.providers import ChatModelProvider, DeterministicChatProvider, LangChainChatProvider
 from app.config import Settings
 
 
@@ -32,6 +32,9 @@ def test_receptionist_cannot_mutate_admin_catalog(client):
 
 def test_provider_swap_preserves_chat_contract(client):
     assert isinstance(DeterministicChatProvider(), ChatModelProvider)
-    assert isinstance(OpenRouterChatProvider(Settings(openrouter_api_key="synthetic")), ChatModelProvider)
+    assert isinstance(
+        LangChainChatProvider(Settings(openrouter_api_key="synthetic")),
+        ChatModelProvider,
+    )
     schema = client.get("/openapi.json").json()
     assert "200" in schema["paths"]["/api/v1/chat/sessions/{session_id}/messages"]["post"]["responses"]

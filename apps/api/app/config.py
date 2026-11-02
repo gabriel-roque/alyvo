@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_secret: str = "alyvo-local-only"
     database_url: str = "sqlite:///./alyvo.db"
     database_admin_url: str | None = None
+    langgraph_database_url: str | None = None
     redis_url: str = "redis://localhost:6379/0"
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
@@ -18,7 +19,11 @@ class Settings(BaseSettings):
     minio_secret_key: str = "alyvo-demo"
     minio_bucket: str = "alyvo-documents"
     minio_secure: bool = False
-    llm_provider: str = "ollama"
+    # Chat models are selected as an ordered pair. ``mock`` remains available
+    # for deterministic tests, while production prefers OpenRouter and falls
+    # back to the local Ollama instance.
+    llm_primary_provider: str = "openrouter"
+    llm_fallback_provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:8b"
     ollama_timeout_seconds: float = 30
@@ -27,7 +32,15 @@ class Settings(BaseSettings):
     ollama_keep_alive: str = "-1"
     openrouter_api_key: str = ""
     openrouter_model: str = "qwen/qwen3-8b"
-    allow_external_providers: bool = False
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_timeout_seconds: float = 12
+    openrouter_max_retries: int = 1
+    allow_external_providers: bool = True
+    langsmith_tracing: bool = False
+    langsmith_api_key: str = ""
+    langsmith_project: str = "alyvo"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_sampling_rate: float = 1.0
     embedding_provider: str = "bge-m3"
     ocr_provider: str = "paddle"
     public_web_url: str = "http://localhost:3000"
