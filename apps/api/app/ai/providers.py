@@ -76,10 +76,12 @@ class DeterministicChatProvider(ChatModelProvider):
         return answer
 
     def respond(self, messages: list[dict], tools: list[dict]) -> ModelTurn:
-        message = messages[-1]["content"].casefold()
+        user_messages = [item["content"] for item in messages if item.get("role") == "user"]
+        message = user_messages[-1].casefold()
+        conversation = " ".join(user_messages).casefold()
         if any(term in message for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")):
             return ModelTurn("", [ToolCall("list_my_appointments", {})])
-        if any(term in message for term in ("agendar", "horário", "horario", "disponibilidade")):
+        if any(term in conversation for term in ("agendar", "marcar uma consulta", "horário", "horario", "disponibilidade")):
             return ModelTurn("", [ToolCall("search_availability", {})])
         if any(term in message for term in ("cancelar", "desmarcar")):
             return ModelTurn("", [ToolCall("list_my_appointments", {"status": "confirmed"})])

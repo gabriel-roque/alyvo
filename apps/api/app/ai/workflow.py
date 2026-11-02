@@ -1,4 +1,6 @@
+import re
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
@@ -10,6 +12,15 @@ from app.models import Appointment, Doctor, Specialty, Unit
 from app.routers.operations import available_slots
 
 SYSTEM_PROMPT = """Você é a assistente administrativa da clínica Alyvo.
+Considere todo o histórico da conversa e continue o fluxo iniciado pelo paciente.
+Responda saudações e conversa casual naturalmente, sem chamar ferramentas.
+Use search_knowledge apenas para dúvidas institucionais. Nunca use search_knowledge
+para conduzir agendamento. Quando o paciente quiser marcar uma consulta, chame
+search_availability imediatamente, mesmo que só haja médico, especialidade ou
+nenhum filtro; datas ausentes significam os próximos 14 dias. Não exija motivo
+antes de mostrar horários. O paciente escolherá um dos horários retornados antes
+de create_appointment ser chamado. Se ele refinar data, médico ou unidade em uma
+mensagem seguinte, preserve os critérios anteriores e chame search_availability novamente.
 Use as ferramentas para consultar dados; nunca invente informações operacionais.
 Não ofereça diagnóstico, prescrição ou triagem. Para ações pessoais, permita que
 o servidor solicite identificação. Responda sempre em português brasileiro."""
@@ -19,7 +30,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "search_knowledge",
-            "description": "Busca informações administrativas na base institucional aprovada.",
+            "description": "Busca informações institucionais aprovadas. Não use para saudações nem para agendamento.",
             "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
         },
     },
@@ -35,7 +46,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "search_availability",
-            "description": "Pesquisa horários disponíveis. Pode ser usada anonimamente.",
+            "description": "Pesquisa horários para continuar um pedido de agendamento. Pode ser usada anonimamente.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -139,10 +150,31 @@ def execute_tool(db: Session, tenant_id: str, identity: dict | None, name: str, 
         unit_id = None
         if parsed.doctor:
             doctor_id = db.scalar(select(Doctor.id).where(Doctor.tenant_id == tenant_id, Doctor.name.ilike(f"%{parsed.doctor}%"), Doctor.active.is_(True)))
+            if not doctor_id:
+                return _base(
+                    f"Não encontrei um médico ativo com o nome “{parsed.doctor}”. Tente informar o nome completo ou a especialidade.",
+                    name,
+                    confidence=0.0,
+                    tool_result={"type": "availability", "items": []},
+                )
         if parsed.specialty:
             specialty_id = db.scalar(select(Specialty.id).where(Specialty.tenant_id == tenant_id, Specialty.name.ilike(f"%{parsed.specialty}%"), Specialty.active.is_(True)))
+            if not specialty_id:
+                return _base(
+                    f"Não encontrei a especialidade “{parsed.specialty}”. Tente outro nome.",
+                    name,
+                    confidence=0.0,
+                    tool_result={"type": "availability", "items": []},
+                )
         if parsed.unit:
             unit_id = db.scalar(select(Unit.id).where(Unit.tenant_id == tenant_id, Unit.name.ilike(f"%{parsed.unit}%"), Unit.active.is_(True)))
+            if not unit_id:
+                return _base(
+                    f"Não encontrei a unidade “{parsed.unit}”. Tente outro nome.",
+                    name,
+                    confidence=0.0,
+                    tool_result={"type": "availability", "items": []},
+                )
         start = parsed.from_ or datetime.now(timezone.utc).date()
         end = min(parsed.to or start + timedelta(days=14), start + timedelta(days=31))
         items = available_slots(db, tenant_id, start, end, doctor_id, specialty_id, unit_id)[:12]
@@ -155,12 +187,46 @@ def execute_tool(db: Session, tenant_id: str, identity: dict | None, name: str, 
     return _base("Não consegui executar essa solicitação.", "unknown", confidence=0.0)
 
 
-def run_workflow(db: Session, tenant_id: str, identity: dict | None, message: str) -> dict:
+def _greeting(message: str) -> str | None:
+    normalized = re.sub(r"[^a-záàâãéêíóôõúç ]", "", message.casefold()).strip()
+    greetings = {
+        "oi": "Olá!",
+        "olá": "Olá!",
+        "ola": "Olá!",
+        "bom dia": "Bom dia!",
+        "boa tarde": "Boa tarde!",
+        "boa noite": "Boa noite!",
+        "tudo bem": "Olá! Tudo bem por aqui.",
+        "oi tudo bem": "Olá! Tudo bem por aqui.",
+        "olá tudo bem": "Olá! Tudo bem por aqui.",
+        "ola tudo bem": "Olá! Tudo bem por aqui.",
+    }
+    prefix = greetings.get(normalized)
+    if not prefix:
+        return None
+    return f"{prefix} Como posso ajudar? Posso consultar médicos, horários, exames, convênios ou suas consultas."
+
+
+def run_workflow(
+    db: Session,
+    tenant_id: str,
+    identity: dict | None,
+    message: str,
+    history: list[dict] | None = None,
+) -> dict:
     lowered = message.casefold()
+    greeting = _greeting(message)
+    if greeting:
+        return _base(greeting, "conversation")
     if any(term in lowered for term in ("diagnóstico", "diagnostico", "prescreva", "receita médica", "qual doença", "dor no peito")):
         return _base("Posso ajudar apenas com informações administrativas. Não faço diagnóstico, prescrição ou triagem. Em uma emergência, procure o serviço de urgência da sua região.", "clinical_safety")
+    today = datetime.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
     turn = chat_provider().respond(
-        [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": message}],
+        [
+            {"role": "system", "content": f"{SYSTEM_PROMPT}\nData atual: {today}. Interprete datas relativas a partir dela."},
+            *(history or []),
+            {"role": "user", "content": message},
+        ],
         TOOLS,
     )
     if not turn.tool_calls:

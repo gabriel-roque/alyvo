@@ -1,5 +1,5 @@
 import httpx
-from app.ai.providers import OllamaChatProvider
+from app.ai.providers import ModelTurn, OllamaChatProvider, ToolCall
 from app.config import Settings
 
 
@@ -26,6 +26,44 @@ def test_clinical_request_is_refused(client):
     response = client.post(f"/api/v1/chat/sessions/{session}/messages", json={"content": "Faça meu diagnóstico e prescreva um remédio"})
     assert response.json()["intent"] == "clinical_safety"
     assert "Não faço diagnóstico" in response.json()["answer"]
+
+
+def test_greeting_is_conversational_and_does_not_trigger_rag(client):
+    session = client.post("/api/v1/chat/sessions", json={}).json()["id"]
+    response = client.post(f"/api/v1/chat/sessions/{session}/messages", json={"content": "Bom dia!"})
+    body = response.json()
+    assert body["intent"] == "conversation"
+    assert body["citations"] == []
+    assert body["answer"].startswith("Bom dia!")
+
+
+def test_follow_up_keeps_context_for_scheduling(client, monkeypatch):
+    captured = []
+
+    class ContextAwareProvider:
+        def respond(self, messages, tools):
+            captured.append(messages)
+            if len([item for item in messages if item["role"] == "user"]) == 1:
+                return ModelTurn("Para qual data você prefere?", [])
+            return ModelTurn("", [ToolCall("search_availability", {"doctor": "Amanda"})])
+
+    monkeypatch.setattr("app.ai.workflow.chat_provider", lambda: ContextAwareProvider())
+    session = client.post("/api/v1/chat/sessions", json={}).json()["id"]
+    first = client.post(
+        f"/api/v1/chat/sessions/{session}/messages",
+        json={"content": "Quero marcar uma consulta com a Dra. Amanda"},
+    )
+    assert first.json()["intent"] == "conversation"
+    second = client.post(
+        f"/api/v1/chat/sessions/{session}/messages",
+        json={"content": "Amanhã, consulta de rotina"},
+    )
+    assert second.json()["intent"] == "search_availability"
+    assert second.json()["tool_result"]["type"] == "availability"
+    assert any(
+        item["role"] == "user" and "Dra. Amanda" in item["content"]
+        for item in captured[-1]
+    )
 
 
 def test_ollama_timeout_returns_grounded_fallback(monkeypatch):

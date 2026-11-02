@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.workflow import execute_tool, run_workflow
@@ -99,8 +100,15 @@ def create_session(payload: SessionCreate, identity: dict | None = Depends(optio
 @router.post("/sessions/{session_id}/messages")
 def post_message(session_id: str, payload: MessageCreate, identity: dict | None = Depends(optional_identity), db: Session = Depends(get_db)):
     session = get_session(db, session_id, identity)
+    previous = db.scalars(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(10)
+    ).all()
+    history = [{"role": item.role, "content": item.content} for item in reversed(previous)]
     db.add(ChatMessage(tenant_id=session.tenant_id, session_id=session.id, role="user", content=payload.content))
-    result = run_workflow(db, session.tenant_id, identity, payload.content)
+    result = run_workflow(db, session.tenant_id, identity, payload.content, history)
     return save_response(db, session, result)
 
 
