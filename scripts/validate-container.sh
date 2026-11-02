@@ -23,6 +23,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 evaluations = json.loads(Path("reports/evaluations.json").read_text())
+metrics = evaluations.get("metrics") or {
+    "intent_accuracy": evaluations["intent_accuracy"],
+    "term_recall": evaluations["term_recall"],
+    "date_accuracy": evaluations["date_accuracy"],
+}
 report = {
     "project": "Alyvo",
     "started_at": sys.argv[1],
@@ -34,7 +39,7 @@ report = {
         "production-build", "system-scenarios", "playwright-four-viewports",
         "rag-graphrag-retrieval", "knowledge-ocr-ingestion"
     ],
-    "metrics": evaluations["metrics"],
+    "metrics": metrics,
 }
 Path("reports/validation.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 print(json.dumps(report, ensure_ascii=False, indent=2))

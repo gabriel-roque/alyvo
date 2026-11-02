@@ -10,12 +10,12 @@ test("landing is reduced to hero, chat CTA and backoffice access", async ({ page
 
 test("anonymous RAG answer exposes approved sources", async ({ page }) => {
   await page.goto("/chat");
-  await page.getByRole("textbox", { name: "Mensagem", exact: true }).fill("Onde fica a Unidade Centro?");
+  await page.getByRole("textbox", { name: "Mensagem", exact: true }).fill("Quais documentos devo levar para exames?");
   await page.getByRole("button", { name: "Enviar mensagem" }).click();
   const response = page.locator(".chat-message.assistant").last();
-  await expect(response).toContainText(/Unidade Centro|informações aprovadas|base aprovada/i, { timeout: 120_000 });
+  await expect(response).toContainText(/documento|carteirinha|informações aprovadas|base aprovada/i, { timeout: 120_000 });
   await response.getByText(/Fontes consultadas/).click();
-  await expect(response.getByText(/Base institucional aprovada/).first()).toBeVisible();
+  await expect(response.getByText(/Manual de atendimento|Base institucional aprovada/).first()).toBeVisible();
 });
 
 test("personal query requests CPF and birth date contextually", async ({ page }) => {
@@ -27,7 +27,16 @@ test("personal query requests CPF and birth date contextually", async ({ page })
   await page.getByLabel("Data de nascimento").fill("1990-01-15");
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("Juliana Silva")).toBeVisible();
-  await expect(page.getByText(/Estas são as suas consultas|não possui consultas/)).toBeVisible();
+  await expect(page.getByText(/Encontrei .*consulta|não possui consultas/)).toBeVisible();
+});
+
+test("relative Friday is preserved and shown in the response", async ({ page }) => {
+  await page.goto("/chat");
+  await page.getByRole("textbox", { name: "Mensagem", exact: true }).fill("Tem horários na sexta-feira à tarde?");
+  await page.getByRole("button", { name: "Enviar mensagem" }).click();
+  const response = page.locator(".chat-message.assistant").last();
+  await expect(response).toContainText(/sexta-feira.*à tarde/i, { timeout: 120_000 });
+  await expect(response.getByRole("button", { name: "Agendar" }).first()).toBeVisible();
 });
 
 test("backoffice shows the simplified navigation and operational agenda", async ({ page }) => {

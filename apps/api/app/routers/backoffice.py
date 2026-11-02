@@ -28,7 +28,7 @@ from app.models import (
     User,
 )
 from app.observability import correlation_id
-from app.routers.operations import available_slots
+from app.routers.operations import available_slots, lock_appointment_slot
 from app.security import current_identity, mask_cpf, require_admin, require_staff
 
 router = APIRouter(prefix="/backoffice", tags=["backoffice"])
@@ -163,6 +163,7 @@ def agenda(
 
 def _slot_for_staff(db: Session, tenant: str, doctor_id: str, starts_at: datetime) -> dict:
     requested = starts_at if starts_at.tzinfo else starts_at.replace(tzinfo=timezone.utc)
+    lock_appointment_slot(db, tenant, doctor_id, requested)
     slots = available_slots(db, tenant, requested.date(), requested.date(), doctor_id=doctor_id)
     slot = next((item for item in slots if item["starts_at"] == requested), None)
     if not slot:

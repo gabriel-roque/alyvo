@@ -246,6 +246,14 @@ h3 { line-height: 1.2; }
 .tool-cards { display: grid; gap: 8px; margin-top: 14px; color: var(--ink); }
 .tool-cards > button, .appointment-tool { min-height: 70px; display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; background: var(--paper-raised); border: 1px solid var(--gray); text-align: left; cursor: pointer; }
 .tool-cards > button:hover { border-color: var(--cobalt); }.tool-cards span { display: flex; flex-direction: column; }.tool-cards small { color: var(--muted); }.tool-icon { width: 36px; height: 36px; display: grid !important; place-items: center; color: var(--cobalt); background: var(--cobalt-soft); border-radius: 8px; }.tool-icon svg { width: 19px; }
+.directory-cards .appointment-tool { grid-template-columns: 40px 1fr; }
+.reply-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.reply-suggestions button { min-height: 36px; padding: 0 12px; border: 1px solid #b8c8f7; border-radius: 18px; color: var(--cobalt); background: var(--cobalt-soft); cursor: pointer; font-weight: 650; }
+.reply-suggestions button:hover { border-color: var(--cobalt); background: #e6edff; }
+.streaming-message { min-width: min(360px, 65vw); }
+.typing-dots { display: flex; gap: 4px; margin-top: 8px; }
+.typing-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: pulse 1s infinite alternate; }
+.typing-dots i:nth-child(2) { animation-delay: .2s; }.typing-dots i:nth-child(3) { animation-delay: .4s; }
 .tool-action { color: var(--cobalt); font-weight: 700; }.appointment-tool > button { min-height: 36px; padding: 0 10px; color: var(--error); background: white; border: 1px solid #fecaca; cursor: pointer; }
 .confirmation-card > div { display: flex; gap: 8px; }.confirmation-card p { color: var(--muted); }
 .operation-success { display: flex; align-items: center; gap: 7px; margin-top: 12px; color: #166534; font-weight: 650; }

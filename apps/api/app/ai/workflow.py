@@ -1,37 +1,64 @@
-import re
+from __future__ import annotations
+
+import time
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.providers import chat_provider
+from app.ai.conversation import (
+    DialogState,
+    human_date,
+    human_datetime,
+    local_datetime,
+    normalized_text,
+    period_from_message,
+    resolve_date_window,
+    tenant_today,
+)
+from app.ai.providers import ToolCall, chat_provider
 from app.ai.retrieval import retrieve
-from app.models import Appointment, Doctor, Specialty, Unit
+from app.models import Appointment, AvailabilityRule, Doctor, Insurer, Specialty, Tenant, Unit
+from app.observability import record
 from app.routers.operations import available_slots
 
-SYSTEM_PROMPT = """Você é a assistente administrativa da clínica Alyvo.
-Considere todo o histórico da conversa e continue o fluxo iniciado pelo paciente.
-Responda saudações e conversa casual naturalmente, sem chamar ferramentas.
-Use search_knowledge apenas para dúvidas institucionais. Nunca use search_knowledge
-para conduzir agendamento. Quando o paciente quiser marcar uma consulta, chame
-search_availability imediatamente, mesmo que só haja médico, especialidade ou
-nenhum filtro; datas ausentes significam os próximos 14 dias. Não exija motivo
-antes de mostrar horários. O paciente escolherá um dos horários retornados antes
-de create_appointment ser chamado. Se ele refinar data, médico ou unidade em uma
-mensagem seguinte, preserve os critérios anteriores e chame search_availability novamente.
-Use as ferramentas para consultar dados; nunca invente informações operacionais.
-Não ofereça diagnóstico, prescrição ou triagem. Para ações pessoais, permita que
-o servidor solicite identificação. Responda sempre em português brasileiro."""
+SYSTEM_PROMPT = """Você é a assistente virtual administrativa da clínica Alyvo.
+Converse em português brasileiro natural, direto e acolhedor. Responda primeiro e faça
+uma pergunta por vez. Não diga que é humana. Preserve o contexto da conversa.
+Use search_directory para médicos, especialidades, unidades e convênios.
+Use search_knowledge somente para políticas, preparo, documentos e informações institucionais.
+Use search_availability para agenda. Nunca invente dados operacionais.
+Não ofereça diagnóstico, prescrição ou triagem. Ações pessoais podem exigir identificação.
+Quando não entender, peça uma informação específica em vez de adivinhar."""
 
 TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "search_directory",
+            "description": "Consulta médicos, especialidades, unidades e convênios cadastrados.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "specialty": {"type": "string"},
+                    "doctor": {"type": "string"},
+                    "unit": {"type": "string"},
+                    "insurer": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_knowledge",
-            "description": "Busca informações institucionais aprovadas. Não use para saudações nem para agendamento.",
-            "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            "description": "Busca políticas e orientações institucionais aprovadas.",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
         },
     },
     {
@@ -39,20 +66,25 @@ TOOLS = [
         "function": {
             "name": "list_my_appointments",
             "description": "Lista as consultas do paciente identificado.",
-            "parameters": {"type": "object", "properties": {"status": {"type": "string", "enum": ["confirmed", "cancelled"]}}},
+            "parameters": {
+                "type": "object",
+                "properties": {"status": {"type": "string", "enum": ["confirmed", "cancelled"]}},
+            },
         },
     },
     {
         "type": "function",
         "function": {
             "name": "search_availability",
-            "description": "Pesquisa horários para continuar um pedido de agendamento. Pode ser usada anonimamente.",
+            "description": "Pesquisa horários reais na agenda da clínica.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "specialty": {"type": "string"},
                     "doctor": {"type": "string"},
                     "unit": {"type": "string"},
+                    "insurer": {"type": "string"},
+                    "period": {"type": "string", "enum": ["morning", "afternoon", "evening"]},
                     "from": {"type": "string", "format": "date"},
                     "to": {"type": "string", "format": "date"},
                 },
@@ -63,7 +95,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_appointment",
-            "description": "Agenda uma consulta para o paciente identificado.",
+            "description": "Agenda a opção escolhida para o paciente identificado.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -88,22 +120,31 @@ TOOLS = [
         },
     },
 ]
+ALLOWED_TOOLS = {item["function"]["name"] for item in TOOLS}
 
 
 class KnowledgeArgs(BaseModel):
     query: str
 
 
+class DirectoryArgs(BaseModel):
+    specialty: str | None = None
+    doctor: str | None = None
+    unit: str | None = None
+    insurer: str | None = None
+    include_address: bool = False
+
+
 class AppointmentListArgs(BaseModel):
     status: str | None = None
 
 
-class AvailabilityArgs(BaseModel):
-    specialty: str | None = None
-    doctor: str | None = None
-    unit: str | None = None
+class AvailabilityArgs(DirectoryArgs):
+    period: str | None = None
     from_: date | None = None
     to: date | None = None
+    offset: int = 0
+    refinement: bool = False
 
 
 def _base(answer: str, tool: str, **values) -> dict:
@@ -116,95 +157,460 @@ def _base(answer: str, tool: str, **values) -> dict:
         "confirmation_request": None,
         "tool_result": None,
         "tool_call": {"name": tool},
+        "suggestions": values.pop("suggestions", []),
+        "resolved_request": values.pop("resolved_request", None),
         **values,
     }
 
 
-def execute_tool(db: Session, tenant_id: str, identity: dict | None, name: str, arguments: dict) -> dict:
-    if name == "search_knowledge":
-        query = KnowledgeArgs.model_validate(arguments).query
-        result = retrieve(db, tenant_id, query)
-        if result.confidence < 0.6:
-            return _base("Não encontrei evidência suficiente na base aprovada. Entre em contato com a clínica para confirmar.", name, confidence=result.confidence)
-        answer = chat_provider().complete(query, result.answer_context)
-        return _base(answer, name, confidence=result.confidence, citations=result.citations)
-    if name == "list_my_appointments":
-        if not identity or identity.get("role") != "patient":
-            return _base("Para consultar suas consultas, confirme seu CPF e sua data de nascimento.", name, auth_required=True, pending_tool={"name": name, "arguments": arguments})
-        parsed = AppointmentListArgs.model_validate(arguments)
-        query = select(Appointment).where(Appointment.tenant_id == tenant_id, Appointment.patient_id == identity["sub"])
-        if parsed.status:
-            query = query.where(Appointment.status == parsed.status)
-        rows = db.scalars(query.order_by(Appointment.starts_at)).all()
-        doctors = {item.id: item.name for item in db.scalars(select(Doctor).where(Doctor.tenant_id == tenant_id))}
-        units = {item.id: item.name for item in db.scalars(select(Unit).where(Unit.tenant_id == tenant_id))}
-        items = [{"id": item.id, "doctor": doctors.get(item.doctor_id), "unit": units.get(item.unit_id), "starts_at": item.starts_at.isoformat(), "status": item.status.value, "reason": item.reason} for item in rows]
-        answer = "Estas são as suas consultas." if items else "Você não possui consultas nesse período."
-        return _base(answer, name, tool_result={"type": "appointments", "items": items})
-    if name == "search_availability":
-        normalized = dict(arguments)
-        normalized["from_"] = normalized.pop("from", None)
-        parsed = AvailabilityArgs.model_validate(normalized)
-        doctor_id = None
-        specialty_id = None
-        unit_id = None
-        if parsed.doctor:
-            doctor_id = db.scalar(select(Doctor.id).where(Doctor.tenant_id == tenant_id, Doctor.name.ilike(f"%{parsed.doctor}%"), Doctor.active.is_(True)))
-            if not doctor_id:
-                return _base(
-                    f"Não encontrei um médico ativo com o nome “{parsed.doctor}”. Tente informar o nome completo ou a especialidade.",
-                    name,
-                    confidence=0.0,
-                    tool_result={"type": "availability", "items": []},
-                )
-        if parsed.specialty:
-            specialty_id = db.scalar(select(Specialty.id).where(Specialty.tenant_id == tenant_id, Specialty.name.ilike(f"%{parsed.specialty}%"), Specialty.active.is_(True)))
-            if not specialty_id:
-                return _base(
-                    f"Não encontrei a especialidade “{parsed.specialty}”. Tente outro nome.",
-                    name,
-                    confidence=0.0,
-                    tool_result={"type": "availability", "items": []},
-                )
+def _timezone(db: Session, tenant_id: str) -> str:
+    tenant = db.get(Tenant, tenant_id)
+    return tenant.timezone if tenant else "America/Sao_Paulo"
+
+
+def _find_id(db: Session, model, tenant_id: str, name: str | None) -> str | None:
+    if not name:
+        return None
+    return db.scalar(
+        select(model.id).where(
+            model.tenant_id == tenant_id,
+            model.name.ilike(f"%{name}%"),
+            model.active.is_(True),
+        )
+    )
+
+
+def _directory(db: Session, tenant_id: str, arguments: dict) -> dict:
+    parsed = DirectoryArgs.model_validate(arguments)
+    if parsed.include_address:
+        units_query = select(Unit).where(
+            Unit.tenant_id == tenant_id,
+            Unit.active.is_(True),
+        )
         if parsed.unit:
-            unit_id = db.scalar(select(Unit.id).where(Unit.tenant_id == tenant_id, Unit.name.ilike(f"%{parsed.unit}%"), Unit.active.is_(True)))
-            if not unit_id:
+            units_query = units_query.where(Unit.name.ilike(f"%{parsed.unit}%"))
+        units = db.scalars(units_query.order_by(Unit.name)).all()
+        if not units:
+            return _base(
+                "Não encontrei essa unidade. Você pode conferir o nome?",
+                "search_directory",
+                confidence=0.0,
+            )
+        details = "; ".join(f"{unit.name}: {unit.address}" for unit in units)
+        return _base(
+            f"{details}.",
+            "search_directory",
+            tool_result={
+                "type": "units",
+                "items": [
+                    {"id": unit.id, "unit": unit.name, "address": unit.address}
+                    for unit in units
+                ],
+            },
+            resolved_request={"unit": parsed.unit, "include_address": True},
+        )
+    query = (
+        select(Doctor, Specialty, Unit)
+        .join(Specialty, Doctor.specialty_id == Specialty.id)
+        .join(Unit, Doctor.unit_id == Unit.id)
+        .where(Doctor.tenant_id == tenant_id, Doctor.active.is_(True), Doctor.deleted_at.is_(None))
+    )
+    if parsed.doctor:
+        query = query.where(Doctor.name.ilike(f"%{parsed.doctor}%"))
+    if parsed.specialty:
+        query = query.where(Specialty.name.ilike(f"%{parsed.specialty}%"))
+    if parsed.unit:
+        query = query.where(Unit.name.ilike(f"%{parsed.unit}%"))
+    insurers = {
+        item.id: item.name
+        for item in db.scalars(select(Insurer).where(Insurer.tenant_id == tenant_id, Insurer.active.is_(True)))
+    }
+    insurer_id = _find_id(db, Insurer, tenant_id, parsed.insurer)
+    rows = []
+    for doctor, specialty, unit in db.execute(query.order_by(Doctor.name)):
+        if parsed.insurer and (not insurer_id or insurer_id not in doctor.insurer_ids):
+            continue
+        rows.append({
+            "id": doctor.id,
+            "doctor": doctor.name,
+            "crm": doctor.crm,
+            "specialty": specialty.name,
+            "unit": unit.name,
+            "insurers": [insurers[item] for item in doctor.insurer_ids if item in insurers],
+        })
+    if not rows:
+        return _base(
+            "Não encontrei profissionais com esses critérios. Posso tentar outra especialidade, unidade ou convênio.",
+            "search_directory",
+            confidence=0.0,
+            tool_result={"type": "directory", "items": []},
+            suggestions=[{"label": "Ver todos os médicos", "message": "Quais médicos atendem na clínica?"}],
+        )
+    names = ", ".join(item["doctor"] for item in rows[:3])
+    return _base(
+        f"Encontrei {len(rows)} {'profissional' if len(rows) == 1 else 'profissionais'}: {names}.",
+        "search_directory",
+        tool_result={"type": "directory", "items": rows},
+        suggestions=[{"label": "Ver horários", "message": "Quero ver os horários disponíveis"}],
+        resolved_request=parsed.model_dump(exclude_none=True),
+    )
+
+
+def execute_tool(db: Session, tenant_id: str, identity: dict | None, name: str, arguments: dict) -> dict:
+    started = time.perf_counter()
+    if name not in ALLOWED_TOOLS:
+        return _base("Não consegui executar essa solicitação com segurança.", "unknown", confidence=0.0)
+    try:
+        if name == "search_directory":
+            return _directory(db, tenant_id, arguments)
+        if name == "search_knowledge":
+            query = KnowledgeArgs.model_validate(arguments).query
+            result = retrieve(db, tenant_id, query)
+            if result.confidence < 0.6:
                 return _base(
-                    f"Não encontrei a unidade “{parsed.unit}”. Tente outro nome.",
+                    "Não encontrei essa informação na base aprovada. Posso ajudar com outra dúvida ou você pode confirmar diretamente com a clínica.",
                     name,
-                    confidence=0.0,
-                    tool_result={"type": "availability", "items": []},
+                    confidence=result.confidence,
+                    suggestions=[{"label": "Ver o que posso fazer", "message": "Como você pode me ajudar?"}],
                 )
-        start = parsed.from_ or datetime.now(timezone.utc).date()
-        end = min(parsed.to or start + timedelta(days=14), start + timedelta(days=31))
-        items = available_slots(db, tenant_id, start, end, doctor_id, specialty_id, unit_id)[:12]
-        serialized = [{**item, "starts_at": item["starts_at"].isoformat(), "ends_at": item["ends_at"].isoformat()} for item in items]
-        return _base("Encontrei estes horários disponíveis." if items else "Não encontrei horários com esses critérios.", name, tool_result={"type": "availability", "items": serialized})
-    if name in {"create_appointment", "cancel_appointment"}:
-        if not identity or identity.get("role") != "patient":
-            return _base("Para continuar, confirme seu CPF e sua data de nascimento.", name, auth_required=True, pending_tool={"name": name, "arguments": arguments})
-        return _base("Revise os dados antes de confirmar.", name, confirmation_request={"tool": name, "arguments": arguments})
+            return _base(
+                chat_provider().complete(query, result.answer_context),
+                name,
+                confidence=result.confidence,
+                citations=result.citations,
+            )
+        if name == "list_my_appointments":
+            if not identity or identity.get("role") != "patient":
+                return _base(
+                    "Para consultar suas consultas com segurança, confirme seu CPF e sua data de nascimento.",
+                    name,
+                    auth_required=True,
+                    pending_tool={"name": name, "arguments": arguments},
+                )
+            parsed = AppointmentListArgs.model_validate(arguments)
+            query = select(Appointment).where(
+                Appointment.tenant_id == tenant_id,
+                Appointment.patient_id == identity["sub"],
+            )
+            if parsed.status:
+                query = query.where(Appointment.status == parsed.status)
+            if parsed.status != "cancelled":
+                query = query.where(Appointment.starts_at >= datetime.now(timezone.utc))
+            rows = db.scalars(query.order_by(Appointment.starts_at)).all()
+            doctors = {item.id: item.name for item in db.scalars(select(Doctor).where(Doctor.tenant_id == tenant_id))}
+            units = {item.id: item.name for item in db.scalars(select(Unit).where(Unit.tenant_id == tenant_id))}
+            timezone_name = _timezone(db, tenant_id)
+            items = [{
+                "id": item.id,
+                "doctor": doctors.get(item.doctor_id),
+                "unit": units.get(item.unit_id),
+                "starts_at": local_datetime(item.starts_at, timezone_name).isoformat(),
+                "status": item.status.value,
+                "reason": item.reason,
+            } for item in rows[:5]]
+            appointment_label = (
+                f"{'consulta cancelada' if len(rows) == 1 else 'consultas canceladas'}"
+                if parsed.status == "cancelled"
+                else f"{'consulta futura confirmada' if len(rows) == 1 else 'consultas futuras confirmadas'}"
+            )
+            answer = f"Encontrei {len(rows)} {appointment_label}." if items else "Você não possui consultas com esse status."
+            if len(rows) > len(items):
+                answer += f" Estou mostrando as próximas {len(items)}."
+            return _base(
+                answer,
+                name,
+                tool_result={
+                    "type": "appointments",
+                    "items": items,
+                    "timezone": timezone_name,
+                    "total": len(rows),
+                    "has_more": len(rows) > len(items),
+                },
+            )
+        if name == "search_availability":
+            normalized = dict(arguments)
+            normalized["from_"] = normalized.pop("from", None)
+            parsed = AvailabilityArgs.model_validate(normalized)
+            doctor_id = _find_id(db, Doctor, tenant_id, parsed.doctor)
+            specialty_id = _find_id(db, Specialty, tenant_id, parsed.specialty)
+            unit_id = _find_id(db, Unit, tenant_id, parsed.unit)
+            insurer_id = _find_id(db, Insurer, tenant_id, parsed.insurer)
+            for value, resolved, label in (
+                (parsed.doctor, doctor_id, "médico"),
+                (parsed.specialty, specialty_id, "especialidade"),
+                (parsed.unit, unit_id, "unidade"),
+                (parsed.insurer, insurer_id, "convênio"),
+            ):
+                if value and not resolved:
+                    return _base(
+                        f"Não encontrei o {label} “{value}”. Você pode conferir o nome ou tentar outro critério.",
+                        name,
+                        confidence=0.0,
+                        tool_result={"type": "availability", "items": [], "total": 0},
+                    )
+            timezone_name = _timezone(db, tenant_id)
+            start = parsed.from_ or tenant_today(timezone_name)
+            end = min(parsed.to or start + timedelta(days=14), start + timedelta(days=31))
+            all_items = available_slots(
+                db, tenant_id, start, end, doctor_id, specialty_id, unit_id, insurer_id, parsed.period
+            )
+            offset = max(parsed.offset, 0)
+            items = all_items[offset : offset + 4]
+            serialized = [{
+                **item,
+                "starts_at": local_datetime(item["starts_at"], timezone_name).isoformat(),
+                "ends_at": local_datetime(item["ends_at"], timezone_name).isoformat(),
+            } for item in items]
+            date_summary = human_date(start) if start == end else f"entre {human_date(start)} e {human_date(end)}"
+            criteria = [date_summary]
+            if parsed.specialty:
+                criteria.append(parsed.specialty)
+            if parsed.doctor:
+                criteria.append(parsed.doctor)
+            if parsed.unit:
+                criteria.append(parsed.unit)
+            if parsed.insurer:
+                criteria.append(f"convênio {parsed.insurer}")
+            period_label = {"morning": "pela manhã", "afternoon": "à tarde", "evening": "à noite"}.get(parsed.period)
+            if period_label:
+                criteria.append(period_label)
+            request_summary = ", ".join(criteria)
+            prefix = "Atualizei os horários" if parsed.refinement else "Encontrei horários"
+            answer = (
+                f"{prefix} para {request_summary}. Veja as opções abaixo."
+                if items
+                else f"Não encontrei horários para {request_summary}. Posso ajustar um dos critérios."
+            )
+            filters = parsed.model_dump(
+                exclude_none=True,
+                exclude={"include_address", "offset", "refinement"},
+            )
+            filters.pop("from_", None)
+            filters["from"] = start.isoformat()
+            filters["to"] = end.isoformat()
+            suggestions = []
+            if offset + len(items) < len(all_items):
+                suggestions.append({"label": "Ver mais horários", "message": "Mostre mais horários"})
+            if parsed.period != "afternoon":
+                suggestions.append({"label": "Somente à tarde", "message": "Mostre somente os horários à tarde"})
+            other_unit = db.scalar(
+                select(Unit)
+                .where(
+                    Unit.tenant_id == tenant_id,
+                    Unit.active.is_(True),
+                    Unit.id != unit_id if unit_id else Unit.id.is_not(None),
+                )
+                .order_by(Unit.name)
+            )
+            if other_unit:
+                suggestions.append(
+                    {
+                        "label": other_unit.name,
+                        "message": f"Procure na {other_unit.name}",
+                    }
+                )
+            return _base(
+                answer,
+                name,
+                tool_result={
+                    "type": "availability",
+                    "items": serialized,
+                    "total": len(all_items),
+                    "has_more": offset + len(items) < len(all_items),
+                    "timezone": timezone_name,
+                    "query_summary": request_summary,
+                },
+                suggestions=suggestions,
+                resolved_request=filters,
+            )
+        if name in {"create_appointment", "cancel_appointment"}:
+            if not identity or identity.get("role") != "patient":
+                return _base(
+                    "Para continuar com segurança, confirme seu CPF e sua data de nascimento.",
+                    name,
+                    auth_required=True,
+                    pending_tool={"name": name, "arguments": arguments},
+                )
+            summary = "Confira os dados antes de confirmar."
+            if name == "create_appointment":
+                doctor = db.get(Doctor, arguments.get("doctor_id"))
+                starts_at = arguments.get("starts_at")
+                if doctor and starts_at:
+                    parsed_datetime = datetime.fromisoformat(starts_at.replace("Z", "+00:00"))
+                    unit = db.get(Unit, doctor.unit_id)
+                    summary = (
+                        f"{doctor.name}, {unit.name if unit else 'unidade informada'}, "
+                        f"{human_datetime(parsed_datetime, _timezone(db, tenant_id))}."
+                    )
+            else:
+                appointment = db.scalar(
+                    select(Appointment).where(
+                        Appointment.id == arguments.get("appointment_id"),
+                        Appointment.tenant_id == tenant_id,
+                        Appointment.patient_id == identity["sub"],
+                    )
+                )
+                if not appointment:
+                    return _base(
+                        "Não encontrei essa consulta no seu cadastro.",
+                        name,
+                        confidence=0.0,
+                    )
+                doctor = db.get(Doctor, appointment.doctor_id)
+                unit = db.get(Unit, appointment.unit_id)
+                summary = (
+                    f"Cancelar a consulta com {doctor.name if doctor else 'o profissional'}, "
+                    f"na {unit.name if unit else 'unidade informada'}, "
+                    f"{human_datetime(appointment.starts_at, _timezone(db, tenant_id))}?"
+                )
+            return _base(
+                "Tudo certo. Revise os dados abaixo antes de concluir.",
+                name,
+                confirmation_request={"tool": name, "arguments": arguments, "summary": summary},
+            )
+    finally:
+        record("tool.execute", tool=name, tenant_id=tenant_id, duration_ms=round((time.perf_counter() - started) * 1000, 1))
     return _base("Não consegui executar essa solicitação.", "unknown", confidence=0.0)
 
 
 def _greeting(message: str) -> str | None:
-    normalized = re.sub(r"[^a-záàâãéêíóôõúç ]", "", message.casefold()).strip()
-    greetings = {
-        "oi": "Olá!",
-        "olá": "Olá!",
-        "ola": "Olá!",
-        "bom dia": "Bom dia!",
-        "boa tarde": "Boa tarde!",
-        "boa noite": "Boa noite!",
-        "tudo bem": "Olá! Tudo bem por aqui.",
-        "oi tudo bem": "Olá! Tudo bem por aqui.",
-        "olá tudo bem": "Olá! Tudo bem por aqui.",
-        "ola tudo bem": "Olá! Tudo bem por aqui.",
-    }
-    prefix = greetings.get(normalized)
-    if not prefix:
+    return {
+        "oi": "Olá! Como posso ajudar você hoje?",
+        "ola": "Olá! Como posso ajudar você hoje?",
+        "bom dia": "Bom dia! Como posso ajudar você hoje?",
+        "boa tarde": "Boa tarde! Como posso ajudar você hoje?",
+        "boa noite": "Boa noite! Como posso ajudar você hoje?",
+        "oi tudo bem": "Olá! Tudo bem por aqui. Como posso ajudar você?",
+        "ola tudo bem": "Olá! Tudo bem por aqui. Como posso ajudar você?",
+    }.get(normalized_text(message))
+
+
+def _schedule_information(db: Session, tenant_id: str, message: str) -> dict | None:
+    text = normalized_text(message)
+    if any(term in text for term in ("feriado", "sabado", "domingo", "fim de semana")):
         return None
-    return f"{prefix} Como posso ajudar? Posso consultar médicos, horários, exames, convênios ou suas consultas."
+    timezone_question = any(term in text for term in ("fuso", "sao paulo", "timezone"))
+    hours_question = any(term in text for term in ("abre", "fecha", "funcionamento", "atendimento comeca"))
+    if not timezone_question and not hours_question:
+        return None
+    rules = db.scalars(
+        select(AvailabilityRule).where(
+            AvailabilityRule.tenant_id == tenant_id,
+            AvailabilityRule.active.is_(True),
+        )
+    ).all()
+    parts = []
+    if timezone_question:
+        parts.append("Sim. Todos os horários são exibidos no horário de São Paulo, o mesmo horário de Brasília")
+    if hours_question and rules:
+        starts_at = min(rule.starts_at for rule in rules)
+        ends_at = max(rule.ends_at for rule in rules)
+        parts.append(
+            f"Na agenda cadastrada, os atendimentos vão das {starts_at:%H:%M} às {ends_at:%H:%M} em dias úteis"
+        )
+    elif hours_question:
+        parts.append("Não encontrei o horário de funcionamento cadastrado; confirme diretamente com a clínica")
+    return _base(". ".join(parts) + ".", "schedule_information")
+
+
+def _deterministic_call(message: str, state: DialogState) -> ToolCall | None:
+    text = normalized_text(message)
+    date_window = resolve_date_window(message)
+    if any(term in text for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")):
+        return ToolCall("list_my_appointments", {"status": "confirmed"})
+    if any(term in text for term in ("cancelar", "desmarcar")):
+        return ToolCall("list_my_appointments", {"status": "confirmed"})
+    if any(term in text for term in ("onde fica", "endereco", "localizacao")) and any(
+        term in text for term in ("unidade", "centro", "sul", "clinica")
+    ):
+        return ToolCall("search_directory", {"include_address": True})
+    scheduling = any(term in text for term in (
+        "agendar", "marcar", "marca consulta", "horario", "orario", "disponibilidade", "agenda"
+    )) or (
+        date_window is not None
+        and any(term in text for term in ("consulta", "cardiolog", "cardeolog", "pediatr", "medico", "doutor", "dra"))
+    )
+    is_refinement = state.active_intent == "search_availability" and (
+        date_window is not None
+        or period_from_message(message) is not None
+        or any(term in text for term in ("unidade", "unid", "centro", "sul", "medico", "doutor", "convenio", "mais horarios", "cardeolog"))
+    )
+    if scheduling or is_refinement:
+        return ToolCall("search_availability", {})
+    directory_terms = ("medico", "doutor", "dra", "cardiolog", "cardeolog", "pediatr", "convenio", "aceita", "profissional")
+    knowledge_qualifiers = ("dura", "duracao", "documento", "preparo", "preparacao", "politica")
+    if any(term in text for term in directory_terms) and not any(term in text for term in knowledge_qualifiers):
+        return ToolCall("search_directory", {})
+    return None
+
+
+def _match_catalog(db: Session, tenant_id: str, message: str, arguments: dict) -> dict:
+    text = normalized_text(message)
+    enriched = dict(arguments)
+    for model, key in ((Doctor, "doctor"), (Specialty, "specialty"), (Unit, "unit"), (Insurer, "insurer")):
+        for item in db.scalars(select(model).where(model.tenant_id == tenant_id)).all():
+            candidate = normalized_text(item.name)
+            minimum_length = 3 if model is Unit else 4
+            identifying_tokens = [
+                token
+                for token in candidate.split()
+                if len(token) >= minimum_length and token not in {"doutora", "doutor", "unidade"}
+            ]
+            token_match = model in {Doctor, Unit} and any(token in text for token in identifying_tokens)
+            if candidate in text or token_match:
+                enriched[key] = item.name
+                break
+    if "cardiolog" in text or "cardeolog" in text:
+        enriched["specialty"] = "Cardiologia"
+    elif "pediatr" in text:
+        enriched["specialty"] = "Pediatria"
+    return enriched
+
+
+def _merge_state(db: Session, tenant_id: str, message: str, call: ToolCall, state: DialogState) -> tuple[ToolCall, DialogState]:
+    arguments = _match_catalog(db, tenant_id, message, call.arguments)
+    if call.name == "search_availability":
+        was_refinement = state.active_intent == "search_availability"
+        previous = state.filters.model_dump(exclude_none=True)
+        if arguments.get("specialty") and arguments.get("specialty") != previous.get("specialty"):
+            previous.pop("doctor", None)
+            state.filters.doctor = None
+        if arguments.get("doctor") and arguments.get("doctor") != previous.get("doctor"):
+            previous.pop("specialty", None)
+            state.filters.specialty = None
+        previous.update(arguments)
+        previous.pop("start_date", None)
+        previous.pop("end_date", None)
+        window = resolve_date_window(message, _timezone(db, tenant_id))
+        if window:
+            previous["from"] = window.start.isoformat()
+            previous["to"] = window.end.isoformat()
+            state.filters.start_date = window.start
+            state.filters.end_date = window.end
+        elif state.filters.start_date:
+            previous["from"] = state.filters.start_date.isoformat()
+            previous["to"] = (state.filters.end_date or state.filters.start_date).isoformat()
+        period = period_from_message(message)
+        if period:
+            previous["period"] = period
+            state.filters.period = period
+        text = normalized_text(message)
+        changed_filters = bool(window or period or any(arguments.get(key) for key in ("specialty", "doctor", "unit", "insurer")))
+        if "mais horarios" in text:
+            state.availability_offset += 4
+        elif changed_filters or not was_refinement:
+            state.availability_offset = 0
+        previous["offset"] = state.availability_offset
+        previous["refinement"] = was_refinement
+        for key in ("specialty", "doctor", "unit", "insurer"):
+            setattr(state.filters, key, previous.get(key))
+        arguments = previous
+    elif call.name == "search_directory":
+        for key in ("specialty", "doctor", "unit", "insurer"):
+            if arguments.get(key):
+                setattr(state.filters, key, arguments[key])
+    state.active_intent = call.name
+    return ToolCall(call.name, arguments), state
 
 
 def run_workflow(
@@ -213,26 +619,85 @@ def run_workflow(
     identity: dict | None,
     message: str,
     history: list[dict] | None = None,
+    session_state: dict | None = None,
 ) -> dict:
-    lowered = message.casefold()
+    try:
+        state = DialogState.model_validate(dict((session_state or {}).get("dialog") or {}))
+    except ValidationError:
+        state = DialogState()
     greeting = _greeting(message)
     if greeting:
-        return _base(greeting, "conversation")
-    if any(term in lowered for term in ("diagnóstico", "diagnostico", "prescreva", "receita médica", "qual doença", "dor no peito")):
-        return _base("Posso ajudar apenas com informações administrativas. Não faço diagnóstico, prescrição ou triagem. Em uma emergência, procure o serviço de urgência da sua região.", "clinical_safety")
-    today = datetime.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
-    turn = chat_provider().respond(
-        [
-            {"role": "system", "content": f"{SYSTEM_PROMPT}\nData atual: {today}. Interprete datas relativas a partir dela."},
-            *(history or []),
-            {"role": "user", "content": message},
-        ],
-        TOOLS,
-    )
-    if not turn.tool_calls:
-        return _base(turn.content or "Como posso ajudar com informações administrativas da clínica?", "conversation")
-    call = turn.tool_calls[0]
+        result = _base(
+            greeting,
+            "conversation",
+            suggestions=[
+                {"label": "Ver horários", "message": "Quero ver horários disponíveis"},
+                {"label": "Encontrar médico", "message": "Quais médicos atendem na clínica?"},
+            ],
+        )
+        result["dialog_state"] = state.model_dump(mode="json")
+        return result
+    schedule_information = _schedule_information(db, tenant_id, message)
+    if schedule_information:
+        schedule_information["dialog_state"] = state.model_dump(mode="json")
+        return schedule_information
+    lowered = normalized_text(message)
+    if any(term in lowered for term in ("diagnostico", "prescreva", "receita medica", "qual doenca", "dor no peito")):
+        result = _base(
+            "Posso ajudar somente com informações administrativas. Não faço diagnóstico, prescrição ou triagem. Se houver uma emergência, procure o serviço de urgência da sua região.",
+            "clinical_safety",
+        )
+        result["dialog_state"] = state.model_dump(mode="json")
+        return result
+    call = _deterministic_call(message, state)
+    if call is None:
+        today = tenant_today(_timezone(db, tenant_id)).isoformat()
+        turn = chat_provider().respond(
+            [
+                {"role": "system", "content": f"{SYSTEM_PROMPT}\nData local atual: {today}."},
+                *(history or []),
+                {"role": "user", "content": message},
+            ],
+            TOOLS,
+        )
+        call = turn.tool_calls[0] if turn.tool_calls else None
+        if call is None:
+            result = _base(
+                turn.content or "Posso ajudar com agenda, profissionais e informações administrativas da clínica.",
+                "conversation",
+            )
+            result["dialog_state"] = state.model_dump(mode="json")
+            return result
+    call, state = _merge_state(db, tenant_id, message, call, state)
+    if call.name == "search_availability" and not call.arguments.get("from"):
+        result = _base(
+            "Para qual dia você quer ver os horários?",
+            call.name,
+            suggestions=[
+                {"label": "Hoje", "message": "Hoje"},
+                {"label": "Amanhã", "message": "Amanhã"},
+                {"label": "Sexta-feira", "message": "Na sexta-feira"},
+            ],
+            resolved_request={
+                key: value
+                for key, value in call.arguments.items()
+                if key in {"specialty", "doctor", "unit", "insurer", "period"} and value
+            },
+        )
+        result["dialog_state"] = state.model_dump(mode="json")
+        return result
     try:
-        return execute_tool(db, tenant_id, identity, call.name, call.arguments)
+        result = execute_tool(db, tenant_id, identity, call.name, call.arguments)
     except ValidationError:
-        return _base("Preciso de mais informações para concluir essa solicitação.", call.name, confidence=0.0)
+        state.recovery_attempts += 1
+        result = _base(
+            "Entendi a ideia, mas preciso de um detalhe para continuar. Qual data, profissional ou especialidade você prefere?",
+            call.name,
+            confidence=0.0,
+            suggestions=[{"label": "Próxima sexta", "message": "Na próxima sexta-feira"}],
+        )
+    tool_result = result.get("tool_result") or {}
+    if tool_result.get("items"):
+        state.last_options = tool_result["items"][:12]
+    result["dialog_state"] = state.model_dump(mode="json")
+    return result

@@ -1,9 +1,10 @@
+import asyncio
 import time
 import uuid
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -24,7 +25,34 @@ async def lifespan(_: FastAPI):
     apply_migrations()
     with AdminSessionLocal() as db:
         ensure_seeded(db)
-    yield
+    # Readiness is only published after the local inference stack and pooled
+    # graph connection are warm. This moves the one-time model cost out of the
+    # patient's first conversation.
+    from app.ai.neo4j_store import knowledge_store
+    from app.ai.providers import chat_provider, embedding_provider
+    settings = get_settings()
+
+    def warm_local_stack() -> None:
+        embedding_provider().embed(["aquecimento da busca institucional"])
+        if settings.app_env != "test":
+            knowledge_store().driver.verify_connectivity()
+        if settings.llm_provider == "ollama":
+            chat_provider().complete("Responda apenas OK.", ["Aquecimento interno sem dados pessoais."])
+
+    try:
+        await asyncio.to_thread(warm_local_stack)
+        record("startup.warmup", status="ok")
+    except Exception as exc:  # pragma: no cover - surfaced by deep readiness
+        record("startup.warmup", status="degraded", reason=type(exc).__name__)
+    try:
+        yield
+    finally:
+        if settings.app_env != "test":
+            knowledge_store().close()
+            provider = chat_provider()
+            client = getattr(provider, "client", None)
+            if client is not None:
+                client.close()
 
 
 app = FastAPI(
@@ -56,11 +84,15 @@ async def correlation_id(request: Request, call_next):
             tenant_id = decode_token(authorization.removeprefix("Bearer "))["tenant"]
         except Exception:
             pass
-    if request.url.path.endswith(("/patient/identify", "/patient/register", "/staff/login", "/refresh")):
-        operation_name = request.url.path.rsplit("/", 2)[-2:]
-        limiter.check(f"auth:{':'.join(operation_name)}:{request.client.host if request.client else 'unknown'}", 10)
-    elif "/chat/" in request.url.path and request.method == "POST":
-        limiter.check(f"chat:{request.client.host if request.client else 'unknown'}")
+    try:
+        if request.url.path.endswith(("/patient/identify", "/patient/register", "/staff/login", "/refresh")):
+            operation_name = request.url.path.rsplit("/", 2)[-2:]
+            limiter.check(f"auth:{':'.join(operation_name)}:{request.client.host if request.client else 'unknown'}", 10)
+        elif "/chat/" in request.url.path and request.method == "POST":
+            category = "session" if request.url.path.endswith("/chat/sessions") else "message"
+            limiter.check(f"chat:{category}:{request.client.host if request.client else 'unknown'}")
+    except HTTPException as exc:
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
     tenant_token = tenant_context.set(tenant_id)
     correlation_token = correlation_id_context.set(request_id)
     try:
@@ -141,9 +173,21 @@ def deep_health():
         try:
             response = httpx.get(f"{get_settings().ollama_base_url}/api/tags", timeout=3)
             response.raise_for_status()
+            running = httpx.get(f"{get_settings().ollama_base_url}/api/ps", timeout=3)
+            running.raise_for_status()
+            models = running.json().get("models", [])
+            selected = next(
+                (item for item in models if item.get("name", "").split(":")[0] == get_settings().ollama_model.split(":")[0]),
+                None,
+            )
+            if selected:
+                size = selected.get("size") or 0
+                size_vram = selected.get("size_vram") or 0
+                services["ollama_acceleration"] = "gpu" if size and size_vram / size >= 0.95 else "partial_or_cpu"
         except Exception:
             services["ollama"] = "unavailable"
-    status = "ok" if all(value == "ok" for value in services.values()) else "degraded"
+    required = ("postgres", "redis", "neo4j", "minio", "ollama")
+    status = "ok" if all(services[value] == "ok" for value in required) else "degraded"
     return JSONResponse({"status": status, "services": services}, status_code=200 if status == "ok" else 503)
 
 

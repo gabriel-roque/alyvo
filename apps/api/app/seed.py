@@ -1,8 +1,9 @@
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .ai.conversation import local_datetime, local_to_utc, tenant_today
 from .models import (
     Availability,
     AvailabilityRule,
@@ -56,14 +57,14 @@ def seed_demo(db: Session) -> None:
     db.add(blood_exam)
     db.flush()
 
-    today = datetime.now(timezone.utc).date()
+    today = tenant_today(primary.timezone)
     for offset in range(1, 8):
         current = today + timedelta(days=offset)
         if current.weekday() >= 5:
             continue
         for doctor in doctors:
             for slot in (time(9, 0), time(10, 30), time(14, 0), time(16, 30)):
-                start = datetime.combine(current, slot, tzinfo=timezone.utc)
+                start = local_to_utc(current, slot, primary.timezone)
                 db.add(Availability(tenant_id=primary.id, doctor_id=doctor.id, unit_id=doctor.unit_id, starts_at=start, ends_at=start + timedelta(minutes=30)))
     for doctor in doctors:
         for weekday in range(5):
@@ -159,10 +160,30 @@ def ensure_seeded(db: Session) -> None:
     if demo_patient and not demo_patient.birth_date:
         demo_patient.birth_date = date(1990, 1, 15)
         db.commit()
-    if not db.scalar(select(AvailabilityRule.id).where(AvailabilityRule.tenant_id == "clinic-alyvo").limit(1)):
+    demo_rules = db.scalars(
+        select(AvailabilityRule).where(AvailabilityRule.tenant_id == "clinic-alyvo")
+    ).all()
+    if not demo_rules:
         for doctor in db.scalars(select(Doctor).where(Doctor.tenant_id == "clinic-alyvo", Doctor.active.is_(True))):
             for weekday in range(5):
                 db.add(AvailabilityRule(tenant_id=doctor.tenant_id, doctor_id=doctor.id, unit_id=doctor.unit_id, weekday=weekday, starts_at=time(8), ends_at=time(18), slot_minutes=30))
+        db.commit()
+    elif any(rule.starts_at != time(8) or rule.ends_at != time(18) for rule in demo_rules):
+        # Keep persistent demo volumes aligned with the documented local hours.
+        for rule in demo_rules:
+            rule.starts_at = time(8)
+            rule.ends_at = time(18)
+        db.commit()
+    stale_demo_slots = [
+        slot
+        for slot in db.scalars(
+            select(Availability).where(Availability.tenant_id == "clinic-alyvo")
+        ).all()
+        if not 8 <= local_datetime(slot.starts_at, "America/Sao_Paulo").hour < 18
+    ]
+    if stale_demo_slots:
+        for slot in stale_demo_slots:
+            db.delete(slot)
         db.commit()
     # One-time rebuild marker for the complete graph schema introduced in v4.
     # It also upgrades persistent demo volumes created by earlier versions.
