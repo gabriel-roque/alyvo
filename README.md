@@ -1,8 +1,8 @@
 # Alyvo
 
 Assistente administrativo multimodal para clínicas, feito com dados sintéticos.
-O projeto reúne chat com RAG/GraphRAG, agenda transacional, OCR revisável e um
-backoffice. Não oferece diagnóstico, prescrição ou triagem.
+O projeto reúne chat anônimo com RAG/GraphRAG e function calling, agenda
+transacional e um backoffice enxuto. Não oferece diagnóstico, prescrição ou triagem.
 
 ## Executar
 
@@ -17,13 +17,12 @@ serviços estiverem saudáveis:
 
 - aplicação: `http://localhost:3000`
 - API e OpenAPI: `http://localhost:8000/docs`
-- e-mails e códigos: `http://localhost:8025`
 - Neo4j: `http://localhost:7474`
 - MinIO: `http://localhost:9001`
 
 Credenciais sintéticas:
 
-- paciente: CPF `123.456.789-09`, código `123456`
+- paciente: CPF `123.456.789-09`, nascimento `15/01/1990`
 - administração: `admin@alyvo.local` / `alyvo-demo`
 - recepção: `recepcao@alyvo.local` / `alyvo-demo`
 
@@ -36,14 +35,14 @@ docker compose --profile validation run --rm validate
 ```
 
 A validação cobre testes Python e web, tipos, lint, build, migrações, RLS,
-concorrência de agenda, outbox/Neo4j, OCR real, RAG/GraphRAG com Ragas e os
-fluxos Playwright em desktop e mobile. O resultado fica em
+concorrência de agenda, outbox/Neo4j, OCR na ingestão de conhecimento,
+RAG/GraphRAG e fluxos Playwright em 375, 768, 1024 e 1440 px. O resultado fica em
 `reports/validation.json`.
 
 ## Componentes
 
 ```text
-Next.js ─► FastAPI ─► LangGraph/LangChain ─► Ollama
+Next.js ─► FastAPI ─► Tool calling + RAG ─► Ollama
                 ├──► PostgreSQL (operações e outbox)
                 ├──► Redis/Celery ─► PaddleOCR + BGE-M3
                 ├──► MinIO (arquivos privados)
@@ -51,7 +50,7 @@ Next.js ─► FastAPI ─► LangGraph/LangChain ─► Ollama
 ```
 
 O PostgreSQL é a fonte de verdade. O worker projeta no Neo4j somente dados e
-documentos aprovados. Documentos de pacientes nunca entram no conhecimento
-compartilhado. O frontend usa os contratos gerados em `packages/contracts`.
+documentos institucionais aprovados. O frontend usa os contratos gerados em
+`packages/contracts`.
 
 Detalhes: [arquitetura](docs/ARCHITECTURE.md) e [roteiro de demonstração](docs/DEMO.md).

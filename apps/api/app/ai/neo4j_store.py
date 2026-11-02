@@ -28,6 +28,11 @@ class Neo4jKnowledgeStore:
         self.driver.close()
 
     def relational(self, tenant_id: str, question: str = "") -> list[GraphHit]:
+        terms = {
+            term.strip(".,?!:;").casefold()
+            for term in question.split()
+            if len(term.strip(".,?!:;")) > 3
+        }
         with self.driver.session() as session:
             rows = session.run(
                 """
@@ -40,18 +45,22 @@ class Neo4jKnowledgeStore:
                 """,
                 tenant_id=tenant_id,
             )
-            return [
-                GraphHit(
-                    content=(
-                        f"{row['doctor']} ({row['crm']}), especialidade {row['specialty']}, "
-                        f"atende na {row['unit']}; convênios: {', '.join(row['insurers'])}."
-                    ),
-                    title="Cadastro aprovado de profissionais",
-                    source="Neo4j",
-                    score=0.98,
+            hits = []
+            for row in rows:
+                content = (
+                    f"{row['doctor']} ({row['crm']}), especialidade {row['specialty']}, "
+                    f"atende na {row['unit']}; convênios: {', '.join(row['insurers'])}."
                 )
-                for row in rows
-            ]
+                lexical_matches = sum(term in content.casefold() for term in terms)
+                hits.append(
+                    GraphHit(
+                        content=content,
+                        title="Cadastro aprovado de profissionais",
+                        source="Neo4j",
+                        score=min(0.82 + lexical_matches * 0.08, 0.99),
+                    )
+                )
+            return sorted(hits, key=lambda hit: hit.score, reverse=True)
 
     def vector(self, tenant_id: str, question: str, limit: int = 5) -> list[GraphHit]:
         vector = embedding_provider().embed([question])[0]

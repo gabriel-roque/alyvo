@@ -1,7 +1,7 @@
 import json
 import re
 import unicodedata
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from app.ai.providers import (
     chat_provider,
@@ -11,7 +11,6 @@ from app.ai.providers import (
 )
 from app.config import get_settings
 from app.db import SessionLocal, set_database_tenant
-from app.document_drafts import put_draft
 from app.models import (
     Doctor,
     DocumentStatus,
@@ -20,8 +19,6 @@ from app.models import (
     KnowledgeChunk,
     KnowledgeDocument,
     OutboxEvent,
-    PatientDocument,
-    Service,
     Specialty,
     Tenant,
     Unit,
@@ -175,7 +172,6 @@ def _known_entities(db, tenant_id: str, text: str) -> list[dict]:
         (Unit, "Unit"),
         (Insurer, "Insurer"),
         (Exam, "Exam"),
-        (Service, "Service"),
     ]
     entities = []
     for model, entity_type in models:
@@ -183,37 +179,6 @@ def _known_entities(db, tenant_id: str, text: str) -> list[dict]:
             if item.name.casefold() in lowered:
                 entities.append({"type": entity_type, "name": item.name, "id": item.id})
     return entities
-
-
-@celery_app.task(name="worker.tasks.process_patient_document", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
-def process_patient_document(document_id: str, tenant_id: str | None = None, request_id: str = "background") -> dict:
-    correlation_id_context.set(request_id)
-    with SessionLocal() as db:
-        set_database_tenant(db, tenant_id or get_settings().demo_tenant)
-        item = db.get(PatientDocument, document_id)
-        if not item:
-            return {"status": "missing"}
-        try:
-            item.status = DocumentStatus.processing
-            db.commit()
-            content = object_storage_provider().get_private(item.storage_key)
-            with operation("ocr.patient_document", document_id=item.id, kind=item.kind):
-                result = ocr_provider().extract(content, item.filename)
-            fields = _structured_fields(result.raw_text, item.kind, result.fields)
-            base_confidence = min(result.confidence.values(), default=0.0)
-            confidence = {
-                key: result.confidence.get(key, base_confidence) for key in fields
-            }
-            # Extracted fields are transient until the patient explicitly accepts them.
-            put_draft(item.tenant_id, item.patient_id, item.id, fields, confidence, result.raw_text)
-            item.status = DocumentStatus.review_required
-            db.commit()
-            record("ocr.patient_document.ready", document_id=item.id, field_names=sorted(fields))
-            return {"status": item.status.value, "document_id": item.id}
-        except Exception as exc:
-            item.status = DocumentStatus.failed
-            db.commit()
-            raise exc
 
 
 @celery_app.task(name="worker.tasks.process_knowledge_document", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
@@ -247,27 +212,4 @@ def process_knowledge_document(document_id: str, tenant_id: str | None = None, r
             raise exc
 
 
-@celery_app.task(name="worker.tasks.enforce_document_retention")
-def enforce_document_retention() -> dict:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=get_settings().retention_days)
-    removed = 0
-    with SessionLocal() as catalog:
-        tenant_ids = list(catalog.scalars(select(Tenant.id)))
-    for tenant_id in tenant_ids:
-        with SessionLocal() as db:
-            set_database_tenant(db, tenant_id)
-            items = db.scalars(
-                select(PatientDocument).where(
-                    PatientDocument.tenant_id == tenant_id,
-                    PatientDocument.deleted_at.is_(None),
-                    PatientDocument.created_at < cutoff,
-                )
-            ).all()
-            for item in items:
-                if item.storage_key:
-                    object_storage_provider().delete_private(item.storage_key)
-                item.deleted_at = datetime.now(timezone.utc)
-                removed += 1
-            db.commit()
-    return {"soft_deleted": removed, "retention_days": get_settings().retention_days}
 

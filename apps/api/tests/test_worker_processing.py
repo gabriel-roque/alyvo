@@ -110,10 +110,8 @@ def test_graph_schema_uses_vector_index_and_complete_relationships():
     projector.driver = Driver()
     projector.ensure_schema()
     projector._catalog("exams", "clinic-alyvo", {"id": "exam-1", "name": "Exame", "unit_ids": ["unit-1"]})
-    projector._catalog("services", "clinic-alyvo", {"id": "service-1", "name": "Serviço", "specialty_id": "specialty-1"})
     joined = " ".join(queries)
     assert "CREATE VECTOR INDEX knowledge_chunk_embedding" in joined
     assert "vector.dimensions`: 1024" in joined
     assert "PERFORMS" in joined
-    assert "OFFERS" in joined
     assert "BELONGS_TO" in joined

@@ -8,7 +8,7 @@
   em índice vetorial de 1.024 dimensões. A recuperação híbrida parte de seeds
   vetoriais, expande relações e reranqueia resultados; toda consulta filtra o tenant.
 - **Redis/Celery:** OCR, embeddings e projeção de outbox fora da requisição.
-- **MinIO:** objetos privados prefixados por clínica e paciente.
+- **MinIO:** arquivos privados de conhecimento prefixados por clínica.
 - **LangGraph:** estado e roteamento da conversa. Os nós chamam recuperação ou
   ferramentas transacionais; as implementações de modelo ficam atrás de adapters.
 
@@ -40,19 +40,12 @@ para produzir erro `409` compreensível.
    mesma transação.
 4. O worker aplica `MERGE` ou deleção idempotente e tenant-scoped no Neo4j.
 5. O índice vetorial recupera seeds; o grafo expande evidências relacionadas e
-   o reranking compõe as fontes. Baixa confiança oferece ticket.
-
-## Fluxo de documento do paciente
-
-O original fica privado no MinIO. OCR bruto, campos e confiança permanecem em
-um rascunho temporário no Redis. Somente a confirmação explícita grava esses
-valores no PostgreSQL e torna o documento visível à recepção. Esses documentos
-nunca são projetados no grafo institucional.
+   o reranking compõe as fontes. Baixa confiança orienta contato com a clínica.
 
 ## Segurança da demonstração
 
 - CPF normalizado, protegido e acompanhado por HMAC para busca por igualdade;
-- OTP expira, tem limite de tentativas e uso único;
+- identificação contextual por CPF e data de nascimento, com rate limit;
 - JWT-like assinado localmente sem dados sensíveis;
 - autorização de paciente e equipe em cada rota;
 - RLS adicional documentada na migration PostgreSQL;

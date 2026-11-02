@@ -30,11 +30,32 @@ def protect_cpf(value: str) -> str:
     return Fernet(key).encrypt(digits.encode()).decode()
 
 
+def unprotect_cpf(value: str | None) -> str:
+    if not value:
+        return ""
+    from cryptography.fernet import Fernet
+
+    key = base64.urlsafe_b64encode(hashlib.sha256(get_settings().app_secret.encode()).digest())
+    return Fernet(key).decrypt(value.encode()).decode()
+
+
+def mask_cpf(value: str | None) -> str:
+    digits = unprotect_cpf(value)
+    return f"***.{digits[3:6]}.{digits[6:9]}-**" if len(digits) == 11 else "***"
+
+
 def hash_value(value: str) -> str:
     return hmac.new(get_settings().app_secret.encode(), value.encode(), hashlib.sha256).hexdigest()
 
 
-def issue_token(user_id: str, tenant_id: str, role: str, minutes: int = 120, kind: str = "access") -> str:
+def issue_token(
+    user_id: str,
+    tenant_id: str,
+    role: str,
+    minutes: int = 120,
+    kind: str = "access",
+    claims: dict | None = None,
+) -> str:
     payload = {
         "sub": user_id,
         "tenant": tenant_id,
@@ -42,6 +63,7 @@ def issue_token(user_id: str, tenant_id: str, role: str, minutes: int = 120, kin
         "kind": kind,
         "jti": secrets.token_urlsafe(12),
         "exp": int((datetime.now(timezone.utc) + timedelta(minutes=minutes)).timestamp()),
+        **(claims or {}),
     }
     body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(get_settings().app_secret.encode(), body.encode(), hashlib.sha256).hexdigest()

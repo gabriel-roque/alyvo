@@ -63,18 +63,18 @@
         }
       }
     },
-    "/api/v1/auth/patient/start": {
+    "/api/v1/auth/patient/identify": {
       "post": {
         "tags": [
           "auth"
         ],
-        "summary": "Start Patient Auth",
-        "operationId": "start_patient_auth_api_v1_auth_patient_start_post",
+        "summary": "Identify Patient",
+        "operationId": "identify_patient_api_v1_auth_patient_identify_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PatientStart"
+                "$ref": "#/components/schemas/PatientIdentify"
               }
             }
           },
@@ -85,50 +85,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PatientStartResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/patient/verify": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Verify Patient",
-        "operationId": "verify_patient_api_v1_auth_patient_verify_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatientVerify"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -167,9 +124,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -208,9 +163,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -249,9 +202,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -326,9 +277,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DoctorDirectoryResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -368,6 +317,40 @@
                 }
               ],
               "title": "Day"
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
             }
           },
           {
@@ -434,9 +417,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AvailabilityResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -493,9 +474,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AppointmentView"
-                }
+                "schema": {}
               }
             }
           },
@@ -542,9 +521,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AppointmentListResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -610,241 +587,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AppointmentView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/patient/documents": {
-      "post": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Upload Patient Document",
-        "operationId": "upload_patient_document_api_v1_patient_documents_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_patient_document_api_v1_patient_documents_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "List Patient Documents",
-        "operationId": "list_patient_documents_api_v1_patient_documents_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentListResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/patient/documents/{document_id}": {
-      "get": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Get Patient Document",
-        "operationId": "get_patient_document_api_v1_patient_documents__document_id__get",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Document Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentView"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/patient/documents/{document_id}/confirm": {
-      "post": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Confirm Patient Document",
-        "operationId": "confirm_patient_document_api_v1_patient_documents__document_id__confirm_post",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Document Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentConfirm"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentView"
-                }
+                "schema": {}
               }
             }
           },
@@ -967,9 +710,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -986,13 +727,13 @@
         }
       }
     },
-    "/api/v1/chat/sessions/{session_id}/events": {
-      "get": {
+    "/api/v1/chat/sessions/{session_id}/resume": {
+      "post": {
         "tags": [
           "chat"
         ],
-        "summary": "Stream Events",
-        "operationId": "stream_events_api_v1_chat_sessions__session_id__events_get",
+        "summary": "Resume",
+        "operationId": "resume_api_v1_chat_sessions__session_id__resume_post",
         "parameters": [
           {
             "name": "session_id",
@@ -1042,13 +783,13 @@
         }
       }
     },
-    "/api/v1/chat/sessions/{session_id}/attachments": {
+    "/api/v1/chat/sessions/{session_id}/actions": {
       "post": {
         "tags": [
           "chat"
         ],
-        "summary": "Upload Attachment",
-        "operationId": "upload_attachment_api_v1_chat_sessions__session_id__attachments_post",
+        "summary": "Request Action",
+        "operationId": "request_action_api_v1_chat_sessions__session_id__actions_post",
         "parameters": [
           {
             "name": "session_id",
@@ -1079,15 +820,90 @@
         "requestBody": {
           "required": true,
           "content": {
-            "multipart/form-data": {
+            "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post"
+                "$ref": "#/components/schemas/ActionCreate"
               }
             }
           }
         },
         "responses": {
-          "202": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/sessions/{session_id}/confirmations/{confirmation_id}": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Confirm Action",
+        "operationId": "confirm_action_api_v1_chat_sessions__session_id__confirmations__confirmation_id__post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "confirmation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Confirmation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -1164,20 +980,23 @@
         "operationId": "agenda_api_v1_backoffice_agenda_get",
         "parameters": [
           {
-            "name": "day",
+            "name": "start",
             "in": "query",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Day"
+              "type": "string",
+              "format": "date",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "End"
             }
           },
           {
@@ -1210,6 +1029,201 @@
                 }
               ],
               "title": "Unit Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backoffice/appointments": {
+      "post": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Create Staff Appointment",
+        "operationId": "create_staff_appointment_api_v1_backoffice_appointments_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffAppointmentPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backoffice/appointments/{appointment_id}": {
+      "patch": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Update Staff Appointment",
+        "operationId": "update_staff_appointment_api_v1_backoffice_appointments__appointment_id__patch",
+        "parameters": [
+          {
+            "name": "appointment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Appointment Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffAppointmentPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backoffice/appointments/{appointment_id}/cancel": {
+      "post": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Cancel Staff Appointment",
+        "operationId": "cancel_staff_appointment_api_v1_backoffice_appointments__appointment_id__cancel_post",
+        "parameters": [
+          {
+            "name": "appointment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Appointment Id"
             }
           },
           {
@@ -1259,6 +1273,26 @@
         "summary": "Doctors",
         "operationId": "doctors_api_v1_backoffice_doctors_get",
         "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Inactive"
+            }
+          },
           {
             "name": "authorization",
             "in": "header",
@@ -1326,7 +1360,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DoctorCreate"
+                "$ref": "#/components/schemas/DoctorPayload"
               }
             }
           }
@@ -1392,7 +1426,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DoctorCreate"
+                "$ref": "#/components/schemas/DoctorPayload"
               }
             }
           }
@@ -1422,8 +1456,8 @@
         "tags": [
           "backoffice"
         ],
-        "summary": "Delete Doctor",
-        "operationId": "delete_doctor_api_v1_backoffice_doctors__doctor_id__delete",
+        "summary": "Archive Doctor",
+        "operationId": "archive_doctor_api_v1_backoffice_doctors__doctor_id__delete",
         "parameters": [
           {
             "name": "doctor_id",
@@ -1483,6 +1517,46 @@
             "schema": {
               "type": "string",
               "title": "Kind"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Inactive"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Page Size"
             }
           },
           {
@@ -1561,7 +1635,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CatalogCreate"
+                "$ref": "#/components/schemas/CatalogPayload"
               }
             }
           }
@@ -1636,7 +1710,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CatalogUpdate"
+                "$ref": "#/components/schemas/CatalogPayload"
               }
             }
           }
@@ -1666,8 +1740,8 @@
         "tags": [
           "backoffice"
         ],
-        "summary": "Delete Catalog",
-        "operationId": "delete_catalog_api_v1_backoffice_catalog__kind___item_id__delete",
+        "summary": "Archive Catalog",
+        "operationId": "archive_catalog_api_v1_backoffice_catalog__kind___item_id__delete",
         "parameters": [
           {
             "name": "kind",
@@ -1730,6 +1804,16 @@
         "operationId": "patients_api_v1_backoffice_patients_get",
         "parameters": [
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -1768,13 +1852,13 @@
         }
       }
     },
-    "/api/v1/backoffice/patient-documents": {
+    "/api/v1/backoffice/availability-rules": {
       "get": {
         "tags": [
           "backoffice"
         ],
-        "summary": "Patient Documents",
-        "operationId": "patient_documents_api_v1_backoffice_patient_documents_get",
+        "summary": "Availability Rules",
+        "operationId": "availability_rules_api_v1_backoffice_availability_rules_get",
         "parameters": [
           {
             "name": "authorization",
@@ -1801,6 +1885,176 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Create Rule",
+        "operationId": "create_rule_api_v1_backoffice_availability_rules_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityRulePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backoffice/availability-rules/{rule_id}": {
+      "patch": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Update Rule",
+        "operationId": "update_rule_api_v1_backoffice_availability_rules__rule_id__patch",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityRulePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Delete Rule",
+        "operationId": "delete_rule_api_v1_backoffice_availability_rules__rule_id__delete",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1865,8 +2119,8 @@
         "tags": [
           "backoffice"
         ],
-        "summary": "Create Availability Block",
-        "operationId": "create_availability_block_api_v1_backoffice_availability_blocks_post",
+        "summary": "Create Block",
+        "operationId": "create_block_api_v1_backoffice_availability_blocks_post",
         "parameters": [
           {
             "name": "authorization",
@@ -1890,7 +2144,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AvailabilityBlockCreate"
+                "$ref": "#/components/schemas/AvailabilityBlockPayload"
               }
             }
           }
@@ -1922,8 +2176,8 @@
         "tags": [
           "backoffice"
         ],
-        "summary": "Delete Availability Block",
-        "operationId": "delete_availability_block_api_v1_backoffice_availability_blocks__block_id__delete",
+        "summary": "Delete Block",
+        "operationId": "delete_block_api_v1_backoffice_availability_blocks__block_id__delete",
         "parameters": [
           {
             "name": "block_id",
@@ -1954,221 +2208,6 @@
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/backoffice/tickets": {
-      "get": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Tickets",
-        "operationId": "tickets_api_v1_backoffice_tickets_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/backoffice/tickets/{ticket_id}": {
-      "patch": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Update Ticket",
-        "operationId": "update_ticket_api_v1_backoffice_tickets__ticket_id__patch",
-        "parameters": [
-          {
-            "name": "ticket_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Ticket Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TicketUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/backoffice/ingestions": {
-      "post": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Create Ingestion",
-        "operationId": "create_ingestion_api_v1_backoffice_ingestions_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IngestionCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Ingestions",
-        "operationId": "ingestions_api_v1_backoffice_ingestions_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
           },
           "422": {
             "description": "Validation Error",
@@ -2220,6 +2259,108 @@
         },
         "responses": {
           "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backoffice/ingestions": {
+      "post": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Create Text Ingestion",
+        "operationId": "create_text_ingestion_api_v1_backoffice_ingestions_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextIngestionPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "backoffice"
+        ],
+        "summary": "Ingestions",
+        "operationId": "ingestions_api_v1_backoffice_ingestions_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -2361,439 +2502,29 @@
           }
         }
       }
-    },
-    "/api/v1/backoffice/graph": {
-      "get": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Graph",
-        "operationId": "graph_api_v1_backoffice_graph_get",
-        "parameters": [
-          {
-            "name": "entity_type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Entity Type"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/backoffice/audit": {
-      "get": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Audit",
-        "operationId": "audit_api_v1_backoffice_audit_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/backoffice/clinic": {
-      "get": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Clinic",
-        "operationId": "clinic_api_v1_backoffice_clinic_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Update Clinic",
-        "operationId": "update_clinic_api_v1_backoffice_clinic_patch",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClinicUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/backoffice/users": {
-      "get": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Staff Users",
-        "operationId": "staff_users_api_v1_backoffice_users_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Create Staff User",
-        "operationId": "create_staff_user_api_v1_backoffice_users_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StaffUserCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/backoffice/users/{user_id}": {
-      "patch": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Update Staff User",
-        "operationId": "update_staff_user_api_v1_backoffice_users__user_id__patch",
-        "parameters": [
-          {
-            "name": "user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "User Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StaffUserUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "backoffice"
-        ],
-        "summary": "Delete Staff User",
-        "operationId": "delete_staff_user_api_v1_backoffice_users__user_id__delete",
-        "parameters": [
-          {
-            "name": "user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "User Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
     "schemas": {
+      "ActionCreate": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Arguments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool",
+          "arguments"
+        ],
+        "title": "ActionCreate"
+      },
       "AppointmentCreate": {
         "properties": {
           "doctor_id": {
@@ -2823,153 +2554,7 @@
         ],
         "title": "AppointmentCreate"
       },
-      "AppointmentListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/AppointmentView"
-            },
-            "type": "array",
-            "title": "Items"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "title": "AppointmentListResponse"
-      },
-      "AppointmentView": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "doctor_id": {
-            "type": "string",
-            "title": "Doctor Id"
-          },
-          "unit_id": {
-            "type": "string",
-            "title": "Unit Id"
-          },
-          "starts_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Starts At"
-          },
-          "ends_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Ends At"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "reason": {
-            "type": "string",
-            "title": "Reason"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "doctor_id",
-          "unit_id",
-          "starts_at",
-          "ends_at",
-          "status",
-          "reason"
-        ],
-        "title": "AppointmentView"
-      },
-      "AuthResponse": {
-        "properties": {
-          "access_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Access Token"
-          },
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token"
-          },
-          "token_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Token Type"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "registration_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Registration Token"
-          },
-          "patient": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Patient"
-          },
-          "user": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User"
-          }
-        },
-        "type": "object",
-        "title": "AuthResponse"
-      },
-      "AvailabilityBlockCreate": {
+      "AvailabilityBlockPayload": {
         "properties": {
           "doctor_id": {
             "type": "string",
@@ -2997,80 +2582,80 @@
           "starts_at",
           "ends_at"
         ],
-        "title": "AvailabilityBlockCreate"
+        "title": "AvailabilityBlockPayload"
       },
-      "AvailabilityResponse": {
+      "AvailabilityRulePayload": {
         "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/AvailabilitySlot"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "source": {
+          "doctor_id": {
             "type": "string",
-            "title": "Source"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "source"
-        ],
-        "title": "AvailabilityResponse"
-      },
-      "AvailabilitySlot": {
-        "properties": {
-          "id": {
+            "title": "Doctor Id"
+          },
+          "unit_id": {
             "type": "string",
-            "title": "Id"
+            "title": "Unit Id"
           },
-          "doctor": {
-            "$ref": "#/components/schemas/SlotDoctor"
-          },
-          "unit": {
-            "$ref": "#/components/schemas/SlotUnit"
+          "weekday": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Weekday"
           },
           "starts_at": {
             "type": "string",
-            "format": "date-time",
+            "format": "time",
             "title": "Starts At"
           },
           "ends_at": {
             "type": "string",
-            "format": "date-time",
+            "format": "time",
             "title": "Ends At"
+          },
+          "slot_minutes": {
+            "type": "integer",
+            "maximum": 240.0,
+            "minimum": 10.0,
+            "title": "Slot Minutes",
+            "default": 30
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": true
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "doctor",
-          "unit",
+          "doctor_id",
+          "unit_id",
+          "weekday",
           "starts_at",
           "ends_at"
         ],
-        "title": "AvailabilitySlot"
-      },
-      "Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post": {
-        "properties": {
-          "file": {
-            "type": "string",
-            "contentMediaType": "application/octet-stream",
-            "title": "File"
-          },
-          "kind": {
-            "type": "string",
-            "title": "Kind",
-            "default": "insurance_card"
-          }
-        },
-        "type": "object",
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post"
+        "title": "AvailabilityRulePayload"
       },
       "Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post": {
         "properties": {
@@ -3091,26 +2676,7 @@
         ],
         "title": "Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post"
       },
-      "Body_upload_patient_document_api_v1_patient_documents_post": {
-        "properties": {
-          "file": {
-            "type": "string",
-            "contentMediaType": "application/octet-stream",
-            "title": "File"
-          },
-          "kind": {
-            "type": "string",
-            "title": "Kind",
-            "default": "insurance_card"
-          }
-        },
-        "type": "object",
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_patient_document_api_v1_patient_documents_post"
-      },
-      "CatalogCreate": {
+      "CatalogPayload": {
         "properties": {
           "name": {
             "type": "string",
@@ -3126,250 +2692,44 @@
             "title": "Address",
             "default": ""
           },
-          "duration_minutes": {
-            "type": "integer",
-            "title": "Duration Minutes",
-            "default": 30
-          },
-          "specialty_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Specialty Id"
+          "preparation": {
+            "type": "string",
+            "title": "Preparation",
+            "default": ""
           },
           "unit_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Unit Ids",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "CatalogCreate"
-      },
-      "CatalogUpdate": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "address": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Address"
-          },
-          "duration_minutes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duration Minutes"
-          },
-          "specialty_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Specialty Id"
-          },
-          "unit_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "title": "Unit Ids"
-          }
-        },
-        "type": "object",
-        "title": "CatalogUpdate"
-      },
-      "ChatResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
           },
-          "answer": {
-            "type": "string",
-            "title": "Answer"
-          },
-          "intent": {
-            "type": "string",
-            "title": "Intent"
-          },
-          "confidence": {
-            "type": "number",
-            "title": "Confidence"
-          },
-          "citations": {
-            "items": {
-              "$ref": "#/components/schemas/Citation"
-            },
-            "type": "array",
-            "title": "Citations"
-          },
-          "form_request": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Form Request"
-          },
-          "confirmation_request": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confirmation Request"
-          },
-          "ticket_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ticket Id"
-          },
-          "tool_result": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tool Result"
-          },
-          "graph_trace": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Graph Trace"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "answer",
-          "intent",
-          "confidence",
-          "citations",
-          "graph_trace"
-        ],
-        "title": "ChatResponse"
-      },
-      "Citation": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "excerpt": {
-            "type": "string",
-            "title": "Excerpt"
-          }
-        },
-        "type": "object",
-        "required": [
-          "title",
-          "source",
-          "excerpt"
-        ],
-        "title": "Citation"
-      },
-      "ClinicUpdate": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "timezone": {
-            "type": "string",
-            "title": "Timezone",
-            "default": "America/Sao_Paulo"
-          },
-          "cancellation_notice_hours": {
-            "type": "integer",
-            "title": "Cancellation Notice Hours",
-            "default": 0
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": true
           }
         },
         "type": "object",
         "required": [
           "name"
         ],
-        "title": "ClinicUpdate"
+        "title": "CatalogPayload"
       },
-      "DoctorCreate": {
+      "ConfirmationBody": {
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted"
+        ],
+        "title": "ConfirmationBody"
+      },
+      "DoctorPayload": {
         "properties": {
           "name": {
             "type": "string",
@@ -3392,8 +2752,12 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Insurer Ids",
-            "default": []
+            "title": "Insurer Ids"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": true
           }
         },
         "type": "object",
@@ -3403,167 +2767,7 @@
           "specialty_id",
           "unit_id"
         ],
-        "title": "DoctorCreate"
-      },
-      "DoctorDirectoryResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DoctorView"
-            },
-            "type": "array",
-            "title": "Items"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "title": "DoctorDirectoryResponse"
-      },
-      "DoctorView": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "crm": {
-            "type": "string",
-            "title": "Crm"
-          },
-          "specialty": {
-            "type": "string",
-            "title": "Specialty"
-          },
-          "unit": {
-            "type": "string",
-            "title": "Unit"
-          },
-          "insurers": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Insurers"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "crm",
-          "specialty",
-          "unit",
-          "insurers"
-        ],
-        "title": "DoctorView"
-      },
-      "DocumentConfirm": {
-        "properties": {
-          "fields": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Fields"
-          },
-          "confirmed": {
-            "type": "boolean",
-            "title": "Confirmed"
-          }
-        },
-        "type": "object",
-        "required": [
-          "fields",
-          "confirmed"
-        ],
-        "title": "DocumentConfirm"
-      },
-      "DocumentListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentView"
-            },
-            "type": "array",
-            "title": "Items"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "title": "DocumentListResponse"
-      },
-      "DocumentView": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "kind": {
-            "type": "string",
-            "title": "Kind"
-          },
-          "filename": {
-            "type": "string",
-            "title": "Filename"
-          },
-          "fields": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Fields"
-          },
-          "confidence": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Confidence"
-          },
-          "confirmed": {
-            "type": "boolean",
-            "title": "Confirmed"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "file_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Url"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "kind",
-          "filename",
-          "fields",
-          "confidence",
-          "confirmed",
-          "status",
-          "created_at"
-        ],
-        "title": "DocumentView"
+        "title": "DoctorPayload"
       },
       "HTTPValidationError": {
         "properties": {
@@ -3578,29 +2782,6 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "IngestionCreate": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "content": {
-            "type": "string",
-            "title": "Content"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "default": "Upload administrativo"
-          }
-        },
-        "type": "object",
-        "required": [
-          "title",
-          "content"
-        ],
-        "title": "IngestionCreate"
-      },
       "IngestionReview": {
         "properties": {
           "entities": {
@@ -3609,8 +2790,7 @@
               "type": "object"
             },
             "type": "array",
-            "title": "Entities",
-            "default": []
+            "title": "Entities"
           },
           "confirmed": {
             "type": "boolean",
@@ -3645,28 +2825,6 @@
           "content": {
             "type": "string",
             "title": "Content"
-          },
-          "confirm_ticket": {
-            "type": "boolean",
-            "title": "Confirm Ticket",
-            "default": false
-          },
-          "confirmed": {
-            "type": "boolean",
-            "title": "Confirmed",
-            "default": false
-          },
-          "action": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Action"
           }
         },
         "type": "object",
@@ -3675,7 +2833,7 @@
         ],
         "title": "MessageCreate"
       },
-      "PatientRegister": {
+      "PatientIdentify": {
         "properties": {
           "tenant_id": {
             "type": "string",
@@ -3685,6 +2843,26 @@
           "cpf": {
             "type": "string",
             "title": "Cpf"
+          },
+          "birth_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Birth Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cpf",
+          "birth_date"
+        ],
+        "title": "PatientIdentify"
+      },
+      "PatientRegister": {
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id",
+            "default": "clinic-alyvo"
           },
           "name": {
             "type": "string",
@@ -3701,98 +2879,11 @@
         },
         "type": "object",
         "required": [
-          "cpf",
           "name",
           "email",
           "registration_token"
         ],
         "title": "PatientRegister"
-      },
-      "PatientStart": {
-        "properties": {
-          "tenant_id": {
-            "type": "string",
-            "title": "Tenant Id",
-            "default": "clinic-alyvo"
-          },
-          "cpf": {
-            "type": "string",
-            "title": "Cpf"
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cpf"
-        ],
-        "title": "PatientStart"
-      },
-      "PatientStartResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "expires_in": {
-            "type": "integer",
-            "title": "Expires In"
-          },
-          "delivery": {
-            "type": "string",
-            "title": "Delivery"
-          },
-          "demo_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Demo Code"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status",
-          "expires_in",
-          "delivery"
-        ],
-        "title": "PatientStartResponse"
-      },
-      "PatientVerify": {
-        "properties": {
-          "tenant_id": {
-            "type": "string",
-            "title": "Tenant Id",
-            "default": "clinic-alyvo"
-          },
-          "cpf": {
-            "type": "string",
-            "title": "Cpf"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cpf",
-          "code"
-        ],
-        "title": "PatientVerify"
       },
       "RefreshRequest": {
         "properties": {
@@ -3807,15 +2898,6 @@
         ],
         "title": "RefreshRequest"
       },
-      "Role": {
-        "type": "string",
-        "enum": [
-          "admin",
-          "receptionist",
-          "patient"
-        ],
-        "title": "Role"
-      },
       "SessionCreate": {
         "properties": {
           "tenant_id": {
@@ -3827,51 +2909,34 @@
         "type": "object",
         "title": "SessionCreate"
       },
-      "SlotDoctor": {
+      "StaffAppointmentPayload": {
         "properties": {
-          "id": {
+          "patient_id": {
             "type": "string",
-            "title": "Id"
+            "title": "Patient Id"
           },
-          "name": {
+          "doctor_id": {
             "type": "string",
-            "title": "Name"
+            "title": "Doctor Id"
           },
-          "crm": {
+          "starts_at": {
             "type": "string",
-            "title": "Crm"
+            "format": "date-time",
+            "title": "Starts At"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": "Consulta"
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "name",
-          "crm"
+          "patient_id",
+          "doctor_id",
+          "starts_at"
         ],
-        "title": "SlotDoctor"
-      },
-      "SlotUnit": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "address": {
-            "type": "string",
-            "title": "Address"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "address"
-        ],
-        "title": "SlotUnit"
+        "title": "StaffAppointmentPayload"
       },
       "StaffLogin": {
         "properties": {
@@ -3896,94 +2961,26 @@
         ],
         "title": "StaffLogin"
       },
-      "StaffUserCreate": {
+      "TextIngestionPayload": {
         "properties": {
-          "name": {
+          "title": {
             "type": "string",
-            "title": "Name"
+            "maxLength": 255,
+            "minLength": 2,
+            "title": "Title"
           },
-          "email": {
+          "content": {
             "type": "string",
-            "title": "Email"
-          },
-          "role": {
-            "$ref": "#/components/schemas/Role"
-          },
-          "password": {
-            "type": "string",
-            "title": "Password"
+            "minLength": 2,
+            "title": "Content"
           }
         },
         "type": "object",
         "required": [
-          "name",
-          "email",
-          "role",
-          "password"
+          "title",
+          "content"
         ],
-        "title": "StaffUserCreate"
-      },
-      "StaffUserUpdate": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          },
-          "role": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Role"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "password": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Password"
-          }
-        },
-        "type": "object",
-        "title": "StaffUserUpdate"
-      },
-      "TicketUpdate": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "TicketUpdate"
+        "title": "TextIngestionPayload"
       },
       "ValidationError": {
         "properties": {

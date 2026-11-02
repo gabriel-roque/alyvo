@@ -1,8 +1,9 @@
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
-from pydantic import BaseModel
-from sqlalchemy import func, select
+from pydantic import BaseModel, Field
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ai.providers import object_storage_provider
@@ -10,95 +11,81 @@ from app.config import get_settings
 from app.db import get_db
 from app.models import (
     Appointment,
+    AppointmentHistory,
+    AppointmentStatus,
     AuditEvent,
     AvailabilityBlock,
+    AvailabilityRule,
     Doctor,
     DocumentStatus,
     Exam,
     Insurer,
     KnowledgeDocument,
     OutboxEvent,
-    PatientDocument,
     Role,
-    Service,
     Specialty,
-    Tenant,
-    Ticket,
     Unit,
     User,
 )
 from app.observability import correlation_id
-from app.security import current_identity, hash_password, require_admin, require_staff
+from app.routers.operations import available_slots
+from app.security import current_identity, mask_cpf, require_admin, require_staff
 
 router = APIRouter(prefix="/backoffice", tags=["backoffice"])
 
 
-class DoctorCreate(BaseModel):
+class DoctorPayload(BaseModel):
     name: str
     crm: str
     specialty_id: str
     unit_id: str
-    insurer_ids: list[str] = []
+    insurer_ids: list[str] = Field(default_factory=list)
+    active: bool = True
 
 
-class CatalogCreate(BaseModel):
+class CatalogPayload(BaseModel):
     name: str
     description: str = ""
     address: str = ""
-    duration_minutes: int = 30
-    specialty_id: str | None = None
-    unit_ids: list[str] = []
+    preparation: str = ""
+    unit_ids: list[str] = Field(default_factory=list)
+    active: bool = True
 
 
-class CatalogUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    address: str | None = None
-    duration_minutes: int | None = None
-    specialty_id: str | None = None
-    unit_ids: list[str] | None = None
+class AvailabilityRulePayload(BaseModel):
+    doctor_id: str
+    unit_id: str
+    weekday: int = Field(ge=0, le=6)
+    starts_at: time
+    ends_at: time
+    slot_minutes: int = Field(default=30, ge=10, le=240)
+    valid_from: date | None = None
+    valid_until: date | None = None
+    active: bool = True
 
 
-class ClinicUpdate(BaseModel):
-    name: str
-    timezone: str = "America/Sao_Paulo"
-    cancellation_notice_hours: int = 0
-
-
-class StaffUserCreate(BaseModel):
-    name: str
-    email: str
-    role: Role
-    password: str
-
-
-class StaffUserUpdate(BaseModel):
-    name: str | None = None
-    email: str | None = None
-    role: Role | None = None
-    password: str | None = None
-
-
-class TicketUpdate(BaseModel):
-    status: str
-
-
-class AvailabilityBlockCreate(BaseModel):
+class AvailabilityBlockPayload(BaseModel):
     doctor_id: str
     starts_at: datetime
     ends_at: datetime
     reason: str = "Bloqueio administrativo"
 
 
-class IngestionCreate(BaseModel):
-    title: str
-    content: str
-    source: str = "Upload administrativo"
+class StaffAppointmentPayload(BaseModel):
+    patient_id: str
+    doctor_id: str
+    starts_at: datetime
+    reason: str = "Consulta"
 
 
 class IngestionReview(BaseModel):
-    entities: list[dict] = []
+    entities: list[dict] = Field(default_factory=list)
     confirmed: bool
+
+
+class TextIngestionPayload(BaseModel):
+    title: str = Field(min_length=2, max_length=255)
+    content: str = Field(min_length=2)
 
 
 def staff(identity: dict = Depends(current_identity)) -> dict:
@@ -111,184 +98,315 @@ def admin(identity: dict = Depends(current_identity)) -> dict:
     return identity
 
 
-def add_audit(db: Session, identity: dict, action: str, resource_type: str, resource_id: str, metadata: dict | None = None) -> None:
-    db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action=action, resource_type=resource_type, resource_id=resource_id, metadata_json=metadata or {}))
-
-
-def catalog_payload(item) -> dict:
-    allowed = {"id", "name", "description", "address", "preparation", "unit_ids", "duration_minutes", "specialty_id", "active"}
-    return {column.name: getattr(item, column.name) for column in item.__table__.columns if column.name in allowed}
+def audit(db: Session, identity: dict, action: str, resource_type: str, resource_id: str) -> None:
+    db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action=action, resource_type=resource_type, resource_id=resource_id))
 
 
 def event_payload(payload: dict) -> dict:
     return {**payload, "_correlation_id": correlation_id()}
 
 
+def catalog_model(kind: str):
+    model = {"specialties": Specialty, "units": Unit, "insurers": Insurer, "exams": Exam}.get(kind)
+    if not model:
+        raise HTTPException(404, "Catálogo não encontrado")
+    return model
+
+
+def serialize_catalog(item) -> dict:
+    fields = ("id", "name", "description", "address", "preparation", "unit_ids", "active")
+    return {field: getattr(item, field) for field in fields if hasattr(item, field)}
+
+
 @router.get("/dashboard")
 def dashboard(identity: dict = Depends(staff), db: Session = Depends(get_db)):
     tenant = identity["tenant"]
+    today = datetime.now(timezone.utc).date()
+    start = datetime.combine(today, time.min, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    today_query = select(func.count()).select_from(Appointment).where(Appointment.tenant_id == tenant, Appointment.starts_at >= start, Appointment.starts_at < end)
     return {
-        "appointments": db.scalar(select(func.count()).select_from(Appointment).where(Appointment.tenant_id == tenant)),
-        "patients": db.scalar(select(func.count()).select_from(User).where(User.tenant_id == tenant, User.role == "patient", User.deleted_at.is_(None))),
-        "documents_pending": db.scalar(select(func.count()).select_from(PatientDocument).where(PatientDocument.tenant_id == tenant, PatientDocument.confirmed.is_(False))),
-        "tickets_open": db.scalar(select(func.count()).select_from(Ticket).where(Ticket.tenant_id == tenant, Ticket.status == "open")),
+        "appointments_today": db.scalar(today_query) or 0,
+        "confirmed_today": db.scalar(today_query.where(Appointment.status == AppointmentStatus.confirmed)) or 0,
+        "patients": db.scalar(select(func.count()).select_from(User).where(User.tenant_id == tenant, User.role == Role.patient, User.deleted_at.is_(None))) or 0,
+        "knowledge_pending": db.scalar(select(func.count()).select_from(KnowledgeDocument).where(KnowledgeDocument.tenant_id == tenant, KnowledgeDocument.status == DocumentStatus.review_required)) or 0,
     }
 
 
 @router.get("/agenda")
-def agenda(day: date | None = None, doctor_id: str | None = None, unit_id: str | None = None, identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    query = select(Appointment).where(Appointment.tenant_id == identity["tenant"])
+def agenda(
+    start: date,
+    end: date,
+    doctor_id: str | None = None,
+    unit_id: str | None = None,
+    status: str | None = None,
+    identity: dict = Depends(staff),
+    db: Session = Depends(get_db),
+):
+    if (end - start).days > 31 or end < start:
+        raise HTTPException(422, "Intervalo inválido")
+    start_at = datetime.combine(start, time.min, tzinfo=timezone.utc)
+    end_at = datetime.combine(end + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    query = select(Appointment).where(Appointment.tenant_id == identity["tenant"], Appointment.starts_at < end_at, Appointment.ends_at > start_at)
     if doctor_id:
         query = query.where(Appointment.doctor_id == doctor_id)
     if unit_id:
         query = query.where(Appointment.unit_id == unit_id)
-    appointments = db.scalars(query.order_by(Appointment.starts_at)).all()
-    if day:
-        appointments = [item for item in appointments if item.starts_at.date() == day]
-    doctors = {item.id: item.name for item in db.scalars(select(Doctor).where(Doctor.tenant_id == identity["tenant"], Doctor.deleted_at.is_(None)))}
-    patients = {item.id: item.name for item in db.scalars(select(User).where(User.tenant_id == identity["tenant"], User.deleted_at.is_(None)))}
-    return {"items": [{"id": item.id, "doctor": doctors.get(item.doctor_id), "patient": patients.get(item.patient_id), "starts_at": item.starts_at, "ends_at": item.ends_at, "status": item.status.value} for item in appointments]}
+    if status:
+        query = query.where(Appointment.status == status)
+    rows = db.scalars(query.order_by(Appointment.starts_at)).all()
+    doctors = {item.id: item.name for item in db.scalars(select(Doctor).where(Doctor.tenant_id == identity["tenant"]))}
+    patients = {item.id: item.name for item in db.scalars(select(User).where(User.tenant_id == identity["tenant"]))}
+    units = {item.id: item.name for item in db.scalars(select(Unit).where(Unit.tenant_id == identity["tenant"]))}
+    return {"items": [{"id": item.id, "doctor_id": item.doctor_id, "doctor": doctors.get(item.doctor_id), "patient_id": item.patient_id, "patient": patients.get(item.patient_id), "unit_id": item.unit_id, "unit": units.get(item.unit_id), "starts_at": item.starts_at, "ends_at": item.ends_at, "status": item.status.value, "reason": item.reason} for item in rows]}
+
+
+def _slot_for_staff(db: Session, tenant: str, doctor_id: str, starts_at: datetime) -> dict:
+    requested = starts_at if starts_at.tzinfo else starts_at.replace(tzinfo=timezone.utc)
+    slots = available_slots(db, tenant, requested.date(), requested.date(), doctor_id=doctor_id)
+    slot = next((item for item in slots if item["starts_at"] == requested), None)
+    if not slot:
+        raise HTTPException(409, "Horário indisponível")
+    return slot
+
+
+@router.post("/appointments", status_code=201)
+def create_staff_appointment(payload: StaffAppointmentPayload, identity: dict = Depends(staff), db: Session = Depends(get_db)):
+    patient = db.scalar(select(User).where(User.id == payload.patient_id, User.tenant_id == identity["tenant"], User.role == Role.patient, User.deleted_at.is_(None)))
+    if not patient:
+        raise HTTPException(404, "Paciente não encontrado")
+    slot = _slot_for_staff(db, identity["tenant"], payload.doctor_id, payload.starts_at)
+    item = Appointment(tenant_id=identity["tenant"], patient_id=patient.id, doctor_id=payload.doctor_id, unit_id=slot["unit"]["id"], starts_at=slot["starts_at"], ends_at=slot["ends_at"], reason=payload.reason)
+    db.add(item)
+    try:
+        db.flush()
+        audit(db, identity, "appointment.created", "appointment", item.id)
+        db.add(AppointmentHistory(tenant_id=identity["tenant"], appointment_id=item.id, actor_id=identity["sub"], from_status=None, to_status=AppointmentStatus.confirmed.value))
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Horário já reservado") from exc
+    return {"id": item.id}
+
+
+@router.patch("/appointments/{appointment_id}")
+def update_staff_appointment(appointment_id: str, payload: StaffAppointmentPayload, identity: dict = Depends(staff), db: Session = Depends(get_db)):
+    item = db.scalar(select(Appointment).where(Appointment.id == appointment_id, Appointment.tenant_id == identity["tenant"]))
+    if not item:
+        raise HTTPException(404, "Consulta não encontrada")
+    original_status = item.status
+    item.status = AppointmentStatus.cancelled
+    db.flush()
+    slot = _slot_for_staff(db, identity["tenant"], payload.doctor_id, payload.starts_at)
+    item.patient_id = payload.patient_id
+    item.doctor_id = payload.doctor_id
+    item.unit_id = slot["unit"]["id"]
+    item.starts_at = slot["starts_at"]
+    item.ends_at = slot["ends_at"]
+    item.reason = payload.reason
+    item.status = AppointmentStatus.confirmed
+    item.cancelled_at = None
+    audit(db, identity, "appointment.rescheduled", "appointment", item.id)
+    db.add(AppointmentHistory(tenant_id=identity["tenant"], appointment_id=item.id, actor_id=identity["sub"], from_status=original_status.value, to_status=AppointmentStatus.confirmed.value, reason="Reagendamento administrativo"))
+    db.commit()
+    return {"id": item.id}
+
+
+@router.post("/appointments/{appointment_id}/cancel")
+def cancel_staff_appointment(appointment_id: str, identity: dict = Depends(staff), db: Session = Depends(get_db)):
+    item = db.scalar(select(Appointment).where(Appointment.id == appointment_id, Appointment.tenant_id == identity["tenant"]))
+    if not item:
+        raise HTTPException(404, "Consulta não encontrada")
+    item.status = AppointmentStatus.cancelled
+    item.cancelled_at = datetime.now(timezone.utc)
+    audit(db, identity, "appointment.cancelled", "appointment", item.id)
+    db.add(AppointmentHistory(tenant_id=identity["tenant"], appointment_id=item.id, actor_id=identity["sub"], from_status=AppointmentStatus.confirmed.value, to_status=AppointmentStatus.cancelled.value))
+    db.commit()
+    return {"id": item.id, "status": item.status.value}
 
 
 @router.get("/doctors")
-def doctors(identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    return {"items": [{"id": item.id, "name": item.name, "crm": item.crm, "specialty_id": item.specialty_id, "unit_id": item.unit_id, "insurer_ids": item.insurer_ids} for item in db.scalars(select(Doctor).where(Doctor.tenant_id == identity["tenant"], Doctor.deleted_at.is_(None)))]}
+def doctors(q: str = "", include_inactive: bool = False, identity: dict = Depends(staff), db: Session = Depends(get_db)):
+    query = select(Doctor).where(Doctor.tenant_id == identity["tenant"], Doctor.deleted_at.is_(None))
+    if q:
+        query = query.where(or_(Doctor.name.ilike(f"%{q}%"), Doctor.crm.ilike(f"%{q}%")))
+    if not include_inactive:
+        query = query.where(Doctor.active.is_(True))
+    rows = db.scalars(query.order_by(Doctor.name)).all()
+    specialties = {item.id: item.name for item in db.scalars(select(Specialty).where(Specialty.tenant_id == identity["tenant"]))}
+    units = {item.id: item.name for item in db.scalars(select(Unit).where(Unit.tenant_id == identity["tenant"]))}
+    insurers = {item.id: item.name for item in db.scalars(select(Insurer).where(Insurer.tenant_id == identity["tenant"]))}
+    return {"items": [{"id": item.id, "name": item.name, "crm": item.crm, "specialty_id": item.specialty_id, "specialty": specialties.get(item.specialty_id), "unit_id": item.unit_id, "unit": units.get(item.unit_id), "insurer_ids": item.insurer_ids, "insurers": [insurers.get(value) for value in item.insurer_ids if insurers.get(value)], "active": item.active} for item in rows]}
+
+
+def validate_doctor_relations(payload: DoctorPayload, tenant: str, db: Session) -> None:
+    if not db.scalar(select(Specialty.id).where(Specialty.id == payload.specialty_id, Specialty.tenant_id == tenant, Specialty.active.is_(True))):
+        raise HTTPException(422, "Especialidade inválida")
+    if not db.scalar(select(Unit.id).where(Unit.id == payload.unit_id, Unit.tenant_id == tenant, Unit.active.is_(True))):
+        raise HTTPException(422, "Unidade inválida")
+    count = db.scalar(select(func.count()).select_from(Insurer).where(Insurer.tenant_id == tenant, Insurer.id.in_(payload.insurer_ids), Insurer.active.is_(True))) or 0
+    if count != len(set(payload.insurer_ids)):
+        raise HTTPException(422, "Convênio inválido")
 
 
 @router.post("/doctors", status_code=201)
-def create_doctor(payload: DoctorCreate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    tenant = identity["tenant"]
-    specialty = db.scalar(select(Specialty).where(Specialty.id == payload.specialty_id, Specialty.tenant_id == tenant))
-    unit = db.scalar(select(Unit).where(Unit.id == payload.unit_id, Unit.tenant_id == tenant))
-    insurer_count = db.scalar(select(func.count()).select_from(Insurer).where(Insurer.tenant_id == tenant, Insurer.id.in_(payload.insurer_ids)))
-    if not specialty or not unit or insurer_count != len(set(payload.insurer_ids)):
-        raise HTTPException(422, "Relacionamentos inválidos para esta clínica")
-    item = Doctor(tenant_id=tenant, **payload.model_dump())
+def create_doctor(payload: DoctorPayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    validate_doctor_relations(payload, identity["tenant"], db)
+    item = Doctor(tenant_id=identity["tenant"], **payload.model_dump())
     db.add(item)
     db.flush()
-    db.add(OutboxEvent(tenant_id=tenant, aggregate_type="doctor", aggregate_id=item.id, event_type="doctor.upserted", payload=event_payload({"id": item.id, **payload.model_dump()})))
-    add_audit(db, identity, "doctor.created", "doctor", item.id)
+    db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type="doctor", aggregate_id=item.id, event_type="doctor.upserted", payload=event_payload({"id": item.id, **payload.model_dump()})))
+    audit(db, identity, "doctor.created", "doctor", item.id)
     db.commit()
     return {"id": item.id, "sync_status": "pending"}
 
 
 @router.put("/doctors/{doctor_id}")
-def update_doctor(doctor_id: str, payload: DoctorCreate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+def update_doctor(doctor_id: str, payload: DoctorPayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
     item = db.scalar(select(Doctor).where(Doctor.id == doctor_id, Doctor.tenant_id == identity["tenant"], Doctor.deleted_at.is_(None)))
     if not item:
         raise HTTPException(404, "Médico não encontrado")
-    specialty = db.scalar(select(Specialty).where(Specialty.id == payload.specialty_id, Specialty.tenant_id == identity["tenant"]))
-    unit = db.scalar(select(Unit).where(Unit.id == payload.unit_id, Unit.tenant_id == identity["tenant"]))
-    insurer_count = db.scalar(select(func.count()).select_from(Insurer).where(Insurer.tenant_id == identity["tenant"], Insurer.id.in_(payload.insurer_ids)))
-    if not specialty or not unit or insurer_count != len(set(payload.insurer_ids)):
-        raise HTTPException(422, "Relacionamentos inválidos para esta clínica")
+    validate_doctor_relations(payload, identity["tenant"], db)
     for key, value in payload.model_dump().items():
         setattr(item, key, value)
     db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type="doctor", aggregate_id=item.id, event_type="doctor.upserted", payload=event_payload({"id": item.id, **payload.model_dump()})))
-    add_audit(db, identity, "doctor.updated", "doctor", item.id)
+    audit(db, identity, "doctor.updated", "doctor", item.id)
     db.commit()
     return {"id": item.id, "sync_status": "pending"}
 
 
 @router.delete("/doctors/{doctor_id}", status_code=204)
-def delete_doctor(doctor_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    from datetime import datetime, timezone
-
+def archive_doctor(doctor_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
     item = db.scalar(select(Doctor).where(Doctor.id == doctor_id, Doctor.tenant_id == identity["tenant"], Doctor.deleted_at.is_(None)))
     if not item:
         raise HTTPException(404, "Médico não encontrado")
     item.active = False
-    item.deleted_at = datetime.now(timezone.utc)
     db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type="doctor", aggregate_id=item.id, event_type="doctor.deleted", payload=event_payload({"id": item.id})))
-    add_audit(db, identity, "doctor.deleted", "doctor", item.id)
+    audit(db, identity, "doctor.archived", "doctor", item.id)
     db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/catalog/{kind}")
-def list_catalog(kind: str, identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    models = {"specialties": Specialty, "units": Unit, "insurers": Insurer, "exams": Exam, "services": Service}
-    model = models.get(kind)
-    if not model:
-        raise HTTPException(404, "Catálogo não encontrado")
-    rows = db.scalars(select(model).where(model.tenant_id == identity["tenant"])).all()
-    if hasattr(model, "active"):
-        rows = [item for item in rows if item.active]
-    return {"items": [{column.name: getattr(item, column.name) for column in model.__table__.columns if column.name not in {"tenant_id"}} for item in rows]}
+def list_catalog(kind: str, q: str = "", include_inactive: bool = False, page: int = 1, page_size: int = 50, identity: dict = Depends(staff), db: Session = Depends(get_db)):
+    model = catalog_model(kind)
+    query = select(model).where(model.tenant_id == identity["tenant"])
+    if q:
+        query = query.where(model.name.ilike(f"%{q}%"))
+    if not include_inactive:
+        query = query.where(model.active.is_(True))
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    rows = db.scalars(query.order_by(model.name).offset((max(page, 1) - 1) * min(page_size, 100)).limit(min(page_size, 100))).all()
+    return {"items": [serialize_catalog(item) for item in rows], "total": total, "page": page, "page_size": min(page_size, 100)}
+
+
+def build_catalog(kind: str, payload: CatalogPayload, tenant: str):
+    if kind == "specialties":
+        return Specialty(tenant_id=tenant, name=payload.name, description=payload.description, active=payload.active)
+    if kind == "units":
+        return Unit(tenant_id=tenant, name=payload.name, address=payload.address, active=payload.active)
+    if kind == "insurers":
+        return Insurer(tenant_id=tenant, name=payload.name, active=payload.active)
+    if kind == "exams":
+        return Exam(tenant_id=tenant, name=payload.name, preparation=payload.preparation, unit_ids=payload.unit_ids, active=payload.active)
+    raise HTTPException(404, "Catálogo não encontrado")
 
 
 @router.post("/catalog/{kind}", status_code=201)
-def create_catalog(kind: str, payload: CatalogCreate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    fields = payload.model_dump()
-    if kind == "specialties":
-        item = Specialty(tenant_id=identity["tenant"], name=fields["name"], description=fields["description"])
-    elif kind == "units":
-        item = Unit(tenant_id=identity["tenant"], name=fields["name"], address=fields["address"])
-    elif kind == "insurers":
-        item = Insurer(tenant_id=identity["tenant"], name=fields["name"])
-    elif kind == "exams":
-        item = Exam(tenant_id=identity["tenant"], name=fields["name"], preparation=fields["description"], unit_ids=fields["unit_ids"])
-    elif kind == "services":
-        item = Service(tenant_id=identity["tenant"], name=fields["name"], duration_minutes=fields["duration_minutes"], specialty_id=fields["specialty_id"])
-    else:
-        raise HTTPException(404, "Catálogo não encontrado")
+def create_catalog(kind: str, payload: CatalogPayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    catalog_model(kind)
+    item = build_catalog(kind, payload, identity["tenant"])
     db.add(item)
-    db.flush()
-    db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type=kind, aggregate_id=item.id, event_type=f"{kind}.upserted", payload=event_payload(catalog_payload(item))))
-    add_audit(db, identity, f"{kind}.created", kind, item.id)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Já existe um registro com este nome") from exc
+    db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type=kind, aggregate_id=item.id, event_type=f"{kind}.upserted", payload=event_payload(serialize_catalog(item))))
+    audit(db, identity, f"{kind}.created", kind, item.id)
     db.commit()
     return {"id": item.id, "sync_status": "pending"}
 
 
 @router.patch("/catalog/{kind}/{item_id}")
-def update_catalog(kind: str, item_id: str, payload: CatalogUpdate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    models = {"specialties": Specialty, "units": Unit, "insurers": Insurer, "exams": Exam, "services": Service}
-    model = models.get(kind)
-    if not model:
-        raise HTTPException(404, "Catálogo não encontrado")
+def update_catalog(kind: str, item_id: str, payload: CatalogPayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    model = catalog_model(kind)
     item = db.scalar(select(model).where(model.id == item_id, model.tenant_id == identity["tenant"]))
     if not item:
-        raise HTTPException(404, "Item não encontrado")
-    for key, value in payload.model_dump(exclude_none=True).items():
-        if hasattr(item, key):
-            setattr(item, key, value)
-    db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type=kind, aggregate_id=item.id, event_type=f"{kind}.upserted", payload=event_payload(catalog_payload(item))))
-    add_audit(db, identity, f"{kind}.updated", kind, item.id)
+        raise HTTPException(404, "Registro não encontrado")
+    replacement = build_catalog(kind, payload, identity["tenant"])
+    for field in ("name", "description", "address", "preparation", "unit_ids", "active"):
+        if hasattr(item, field) and hasattr(replacement, field):
+            setattr(item, field, getattr(replacement, field))
+    db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type=kind, aggregate_id=item.id, event_type=f"{kind}.upserted", payload=event_payload(serialize_catalog(item))))
+    audit(db, identity, f"{kind}.updated", kind, item.id)
     db.commit()
     return {"id": item.id, "sync_status": "pending"}
 
 
 @router.delete("/catalog/{kind}/{item_id}", status_code=204)
-def delete_catalog(kind: str, item_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    models = {"specialties": Specialty, "units": Unit, "insurers": Insurer, "exams": Exam, "services": Service}
-    model = models.get(kind)
-    if not model:
-        raise HTTPException(404, "Catálogo não encontrado")
+def archive_catalog(kind: str, item_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    model = catalog_model(kind)
     item = db.scalar(select(model).where(model.id == item_id, model.tenant_id == identity["tenant"]))
     if not item:
-        raise HTTPException(404, "Item não encontrado")
-    if hasattr(item, "active"):
-        item.active = False
-    else:
-        db.delete(item)
+        raise HTTPException(404, "Registro não encontrado")
+    item.active = False
     db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type=kind, aggregate_id=item.id, event_type=f"{kind}.deleted", payload=event_payload({"id": item.id})))
-    add_audit(db, identity, f"{kind}.deleted", kind, item.id)
+    audit(db, identity, f"{kind}.archived", kind, item.id)
     db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/patients")
-def patients(identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    rows = db.scalars(select(User).where(User.tenant_id == identity["tenant"], User.role == "patient", User.deleted_at.is_(None))).all()
-    add_audit(db, identity, "patients.viewed", "patient", "collection", {"count": len(rows)})
+def patients(q: str = "", identity: dict = Depends(staff), db: Session = Depends(get_db)):
+    query = select(User).where(User.tenant_id == identity["tenant"], User.role == Role.patient, User.deleted_at.is_(None))
+    if q:
+        query = query.where(or_(User.name.ilike(f"%{q}%"), User.email.ilike(f"%{q}%")))
+    rows = db.scalars(query.order_by(User.name)).all()
+    audit(db, identity, "patients.viewed", "patient", "collection")
     db.commit()
-    return {"items": [{"id": item.id, "name": item.name, "email": item.email} for item in rows]}
+    return {"items": [{"id": item.id, "name": item.name, "email": item.email, "cpf": mask_cpf(item.cpf_encrypted), "birth_date": item.birth_date, "created_at": item.created_at} for item in rows]}
 
 
-@router.get("/patient-documents")
-def patient_documents(identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    rows = db.scalars(select(PatientDocument).where(PatientDocument.tenant_id == identity["tenant"], PatientDocument.deleted_at.is_(None), PatientDocument.confirmed.is_(True))).all()
-    db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action="patient_documents.viewed", resource_type="patient_document", resource_id="collection", metadata_json={"count": len(rows)}))
+@router.get("/availability-rules")
+def availability_rules(identity: dict = Depends(staff), db: Session = Depends(get_db)):
+    rows = db.scalars(select(AvailabilityRule).where(AvailabilityRule.tenant_id == identity["tenant"]).order_by(AvailabilityRule.weekday, AvailabilityRule.starts_at)).all()
+    return {"items": [{"id": item.id, "doctor_id": item.doctor_id, "unit_id": item.unit_id, "weekday": item.weekday, "starts_at": item.starts_at, "ends_at": item.ends_at, "slot_minutes": item.slot_minutes, "valid_from": item.valid_from, "valid_until": item.valid_until, "active": item.active} for item in rows]}
+
+
+@router.post("/availability-rules", status_code=201)
+def create_rule(payload: AvailabilityRulePayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    if payload.starts_at >= payload.ends_at:
+        raise HTTPException(422, "Intervalo inválido")
+    item = AvailabilityRule(tenant_id=identity["tenant"], **payload.model_dump())
+    db.add(item)
+    db.flush()
+    audit(db, identity, "availability_rule.created", "availability_rule", item.id)
     db.commit()
-    return {"items": [{"id": item.id, "patient_id": item.patient_id, "kind": item.kind, "filename": item.filename, "fields": item.fields, "confirmed": item.confirmed, "status": item.status.value} for item in rows]}
+    return {"id": item.id}
+
+
+@router.patch("/availability-rules/{rule_id}")
+def update_rule(rule_id: str, payload: AvailabilityRulePayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    item = db.scalar(select(AvailabilityRule).where(AvailabilityRule.id == rule_id, AvailabilityRule.tenant_id == identity["tenant"]))
+    if not item:
+        raise HTTPException(404, "Regra não encontrada")
+    for key, value in payload.model_dump().items():
+        setattr(item, key, value)
+    audit(db, identity, "availability_rule.updated", "availability_rule", item.id)
+    db.commit()
+    return {"id": item.id}
+
+
+@router.delete("/availability-rules/{rule_id}", status_code=204)
+def delete_rule(rule_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    item = db.scalar(select(AvailabilityRule).where(AvailabilityRule.id == rule_id, AvailabilityRule.tenant_id == identity["tenant"]))
+    if not item:
+        raise HTTPException(404, "Regra não encontrada")
+    item.active = False
+    audit(db, identity, "availability_rule.archived", "availability_rule", item.id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/availability-blocks")
@@ -298,103 +416,67 @@ def availability_blocks(identity: dict = Depends(staff), db: Session = Depends(g
 
 
 @router.post("/availability-blocks", status_code=201)
-def create_availability_block(payload: AvailabilityBlockCreate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+def create_block(payload: AvailabilityBlockPayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
     if payload.starts_at >= payload.ends_at:
         raise HTTPException(422, "Intervalo inválido")
-    doctor = db.scalar(select(Doctor).where(Doctor.id == payload.doctor_id, Doctor.tenant_id == identity["tenant"], Doctor.active.is_(True)))
-    if not doctor:
-        raise HTTPException(404, "Médico não encontrado")
     item = AvailabilityBlock(tenant_id=identity["tenant"], **payload.model_dump())
     db.add(item)
     db.flush()
-    add_audit(db, identity, "availability_block.created", "availability_block", item.id)
+    audit(db, identity, "availability_block.created", "availability_block", item.id)
     db.commit()
-    db.refresh(item)
     return {"id": item.id}
 
 
 @router.delete("/availability-blocks/{block_id}", status_code=204)
-def delete_availability_block(block_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+def delete_block(block_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
     item = db.scalar(select(AvailabilityBlock).where(AvailabilityBlock.id == block_id, AvailabilityBlock.tenant_id == identity["tenant"]))
     if not item:
         raise HTTPException(404, "Bloqueio não encontrado")
     db.delete(item)
-    add_audit(db, identity, "availability_block.deleted", "availability_block", item.id)
+    audit(db, identity, "availability_block.deleted", "availability_block", item.id)
     db.commit()
     return Response(status_code=204)
 
 
-@router.get("/tickets")
-def tickets(identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    rows = db.scalars(select(Ticket).where(Ticket.tenant_id == identity["tenant"]).order_by(Ticket.created_at.desc())).all()
-    return {"items": [{"id": item.id, "subject": item.subject, "message": item.message, "status": item.status, "created_at": item.created_at} for item in rows]}
-
-
-@router.patch("/tickets/{ticket_id}")
-def update_ticket(ticket_id: str, payload: TicketUpdate, identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    item = db.scalar(select(Ticket).where(Ticket.id == ticket_id, Ticket.tenant_id == identity["tenant"]))
-    if not item:
-        raise HTTPException(404, "Ticket não encontrado")
-    if payload.status not in {"open", "in_progress", "resolved"}:
-        raise HTTPException(422, "Status inválido")
-    item.status = payload.status
-    add_audit(db, identity, "ticket.updated", "ticket", item.id, {"status": payload.status})
-    db.commit()
-    return {"id": item.id, "status": item.status}
-
-
-@router.post("/ingestions", status_code=201)
-def create_ingestion(payload: IngestionCreate, identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    require_admin(identity)
-    chunks = [payload.content[index : index + 700] for index in range(0, len(payload.content), 600)]
-    item = KnowledgeDocument(tenant_id=identity["tenant"], title=payload.title, content=payload.content, source=payload.source, status=DocumentStatus.review_required, entities=[], chunks=chunks)
-    db.add(item)
-    db.flush()
-    add_audit(db, identity, "ingestion.created", "knowledge_document", item.id)
-    db.commit()
-    db.refresh(item)
-    return {"id": item.id, "status": item.status.value, "preview": item.content[:500]}
-
-
 @router.post("/ingestions/upload", status_code=202)
-async def upload_ingestion(
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    identity: dict = Depends(admin),
-    db: Session = Depends(get_db),
-):
+async def upload_ingestion(file: UploadFile = File(...), title: str = Form(...), identity: dict = Depends(admin), db: Session = Depends(get_db)):
     content = await file.read()
     if not content or len(content) > get_settings().upload_max_bytes:
         raise HTTPException(422, "Arquivo vazio ou acima do limite")
-    allowed = {"application/pdf", "text/plain", "text/markdown", "image/png", "image/jpeg"}
-    if file.content_type not in allowed:
+    if file.content_type not in {"application/pdf", "text/plain", "text/markdown", "image/png", "image/jpeg"}:
         raise HTTPException(415, "Formato não suportado")
     filename = file.filename or "documento"
-    item = KnowledgeDocument(
-        tenant_id=identity["tenant"],
-        title=title,
-        filename=filename,
-        content_type=file.content_type or "application/octet-stream",
-        source="Upload administrativo",
-        status=DocumentStatus.uploaded,
-    )
+    item = KnowledgeDocument(tenant_id=identity["tenant"], title=title, filename=filename, content_type=file.content_type or "application/octet-stream", source="Upload administrativo", status=DocumentStatus.uploaded)
     db.add(item)
     db.flush()
-    key = f"{identity['tenant']}/knowledge/{item.id}/{filename}"
-    item.storage_key = object_storage_provider().put_private(key, content, item.content_type)
+    item.storage_key = object_storage_provider().put_private(f"{identity['tenant']}/knowledge/{item.id}/{filename}", content, item.content_type)
     db.commit()
     if get_settings().app_env == "test":
         from worker.tasks import process_knowledge_document
-
         process_knowledge_document(item.id, identity["tenant"], correlation_id())
     else:
         from worker.celery_app import celery_app
+        celery_app.send_task("worker.tasks.process_knowledge_document", args=[item.id, identity["tenant"], correlation_id()])
+    audit(db, identity, "ingestion.uploaded", "knowledge_document", item.id)
+    db.commit()
+    return {"id": item.id, "status": item.status.value}
 
-        celery_app.send_task(
-            "worker.tasks.process_knowledge_document",
-            args=[item.id, identity["tenant"], correlation_id()],
-        )
-    add_audit(db, identity, "ingestion.uploaded", "knowledge_document", item.id)
+
+@router.post("/ingestions", status_code=201)
+def create_text_ingestion(payload: TextIngestionPayload, identity: dict = Depends(admin), db: Session = Depends(get_db)):
+    item = KnowledgeDocument(
+        tenant_id=identity["tenant"],
+        title=payload.title,
+        content=payload.content,
+        filename=f"{payload.title}.txt",
+        content_type="text/plain",
+        source="Cadastro administrativo",
+        status=DocumentStatus.review_required,
+        chunks=[{"position": 0, "content": payload.content}],
+    )
+    db.add(item)
+    db.flush()
+    audit(db, identity, "ingestion.created", "knowledge_document", item.id)
     db.commit()
     return {"id": item.id, "status": item.status.value}
 
@@ -403,7 +485,7 @@ async def upload_ingestion(
 def ingestions(identity: dict = Depends(staff), db: Session = Depends(get_db)):
     rows = db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.tenant_id == identity["tenant"]).order_by(KnowledgeDocument.created_at.desc())).all()
     pending = {item.aggregate_id for item in db.scalars(select(OutboxEvent).where(OutboxEvent.tenant_id == identity["tenant"], OutboxEvent.processed_at.is_(None)))}
-    return {"items": [{"id": item.id, "title": item.title, "source": item.source, "status": item.status.value, "sync_status": "pending" if item.id in pending else "synced", "entities": item.entities, "preview": item.content[:240]} for item in rows]}
+    return {"items": [{"id": item.id, "title": item.title, "source": item.source, "status": item.status.value, "sync_status": "pending" if item.id in pending else "synced", "entities": item.entities, "preview": item.content[:500], "created_at": item.created_at} for item in rows]}
 
 
 @router.post("/ingestions/{document_id}/approve")
@@ -416,7 +498,7 @@ def approve_ingestion(document_id: str, payload: IngestionReview, identity: dict
     item.entities = payload.entities
     item.status = DocumentStatus.published
     db.add(OutboxEvent(tenant_id=identity["tenant"], aggregate_type="knowledge_document", aggregate_id=item.id, event_type="knowledge.published", payload=event_payload({"id": item.id, "title": item.title, "source": item.source, "entities": item.entities, "chunks": item.chunks})))
-    add_audit(db, identity, "ingestion.published", "knowledge_document", item.id)
+    audit(db, identity, "ingestion.published", "knowledge_document", item.id)
     db.commit()
     return {"id": item.id, "status": item.status.value, "sync_status": "pending"}
 
@@ -427,110 +509,6 @@ def reject_ingestion(document_id: str, identity: dict = Depends(admin), db: Sess
     if not item:
         raise HTTPException(404, "Ingestão não encontrada")
     item.status = DocumentStatus.rejected
-    add_audit(db, identity, "ingestion.rejected", "knowledge_document", item.id)
+    audit(db, identity, "ingestion.rejected", "knowledge_document", item.id)
     db.commit()
     return {"id": item.id, "status": item.status.value}
-
-
-@router.get("/graph")
-def graph(entity_type: str | None = None, identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    if get_settings().app_env != "test":
-        try:
-            from neo4j import GraphDatabase
-
-            settings = get_settings()
-            driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
-            with driver.session() as session:
-                nodes = [dict(row["node"]) for row in session.run("MATCH (n {tenant_id: $tenant}) WHERE $entity_type IS NULL OR $entity_type IN labels(n) RETURN n {.*, type: head(labels(n))} AS node LIMIT 250", tenant=identity["tenant"], entity_type=entity_type)]
-                edges = [dict(row["edge"]) for row in session.run("MATCH (a {tenant_id: $tenant})-[r]->(b {tenant_id: $tenant}) RETURN {source: a.id, target: b.id, type: type(r)} AS edge LIMIT 500", tenant=identity["tenant"])]
-            driver.close()
-            add_audit(db, identity, "graph.viewed", "graph", "collection", {"entity_type": entity_type})
-            db.commit()
-            return {"nodes": nodes, "edges": edges, "readonly": True, "source": "neo4j"}
-        except Exception:
-            pass
-    doctors = db.scalars(select(Doctor).where(Doctor.tenant_id == identity["tenant"])).all()
-    specialties = {item.id: item for item in db.scalars(select(Specialty).where(Specialty.tenant_id == identity["tenant"]))}
-    units = {item.id: item for item in db.scalars(select(Unit).where(Unit.tenant_id == identity["tenant"]))}
-    nodes = []
-    edges = []
-    for doctor in doctors:
-        nodes.extend([{"id": doctor.id, "label": doctor.name, "type": "Doctor"}, {"id": doctor.specialty_id, "label": specialties[doctor.specialty_id].name, "type": "Specialty"}, {"id": doctor.unit_id, "label": units[doctor.unit_id].name, "type": "Unit"}])
-        edges.extend([{"source": doctor.id, "target": doctor.specialty_id, "type": "HAS_SPECIALTY"}, {"source": doctor.id, "target": doctor.unit_id, "type": "WORKS_AT"}])
-    return {"nodes": list({item["id"]: item for item in nodes}.values()), "edges": edges, "readonly": True, "source": "postgresql-fallback"}
-
-
-@router.get("/audit")
-def audit(identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    rows = db.scalars(select(AuditEvent).where(AuditEvent.tenant_id == identity["tenant"]).order_by(AuditEvent.created_at.desc())).all()
-    add_audit(db, identity, "audit.viewed", "audit_event", "collection", {"count": len(rows)})
-    db.commit()
-    return {"items": [{"id": item.id, "actor_id": item.actor_id, "action": item.action, "resource_type": item.resource_type, "resource_id": item.resource_id, "metadata": item.metadata_json, "created_at": item.created_at} for item in rows]}
-
-
-@router.get("/clinic")
-def clinic(identity: dict = Depends(staff), db: Session = Depends(get_db)):
-    item = db.get(Tenant, identity["tenant"])
-    return {"id": item.id, "name": item.name, "timezone": item.timezone, "cancellation_notice_hours": item.cancellation_notice_hours}
-
-
-@router.patch("/clinic")
-def update_clinic(payload: ClinicUpdate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    item = db.get(Tenant, identity["tenant"])
-    item.name = payload.name
-    item.timezone = payload.timezone
-    item.cancellation_notice_hours = payload.cancellation_notice_hours
-    add_audit(db, identity, "clinic.updated", "clinic", item.id)
-    db.commit()
-    return {"id": item.id, "name": item.name, "timezone": item.timezone, "cancellation_notice_hours": item.cancellation_notice_hours}
-
-
-@router.get("/users")
-def staff_users(identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    rows = db.scalars(select(User).where(User.tenant_id == identity["tenant"], User.role.in_([Role.admin, Role.receptionist]), User.deleted_at.is_(None))).all()
-    return {"items": [{"id": item.id, "name": item.name, "email": item.email, "role": item.role.value} for item in rows]}
-
-
-@router.post("/users", status_code=201)
-def create_staff_user(payload: StaffUserCreate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    if payload.role not in {Role.admin, Role.receptionist}:
-        raise HTTPException(422, "Perfil inválido para usuário interno")
-    item = User(tenant_id=identity["tenant"], name=payload.name, email=payload.email, role=payload.role, password_hash=hash_password(payload.password))
-    db.add(item)
-    db.flush()
-    add_audit(db, identity, "staff_user.created", "user", item.id, {"role": payload.role.value})
-    db.commit()
-    return {"id": item.id}
-
-
-@router.patch("/users/{user_id}")
-def update_staff_user(user_id: str, payload: StaffUserUpdate, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    item = db.scalar(select(User).where(User.id == user_id, User.tenant_id == identity["tenant"], User.role.in_([Role.admin, Role.receptionist]), User.deleted_at.is_(None)))
-    if not item:
-        raise HTTPException(404, "Usuário não encontrado")
-    values = payload.model_dump(exclude_none=True)
-    if "role" in values and values["role"] not in {Role.admin, Role.receptionist}:
-        raise HTTPException(422, "Perfil inválido")
-    password = values.pop("password", None)
-    for key, value in values.items():
-        setattr(item, key, value)
-    if password:
-        item.password_hash = hash_password(password)
-    add_audit(db, identity, "staff_user.updated", "user", item.id)
-    db.commit()
-    return {"id": item.id}
-
-
-@router.delete("/users/{user_id}", status_code=204)
-def delete_staff_user(user_id: str, identity: dict = Depends(admin), db: Session = Depends(get_db)):
-    item = db.scalar(select(User).where(User.id == user_id, User.tenant_id == identity["tenant"], User.role.in_([Role.admin, Role.receptionist]), User.deleted_at.is_(None)))
-    if not item:
-        raise HTTPException(404, "Usuário não encontrado")
-    if item.id == identity["sub"]:
-        raise HTTPException(409, "Não é possível remover o próprio usuário")
-    from datetime import timezone
-    item.deleted_at = datetime.now(timezone.utc)
-    add_audit(db, identity, "staff_user.deleted", "user", item.id)
-    db.commit()
-    return Response(status_code=204)
-

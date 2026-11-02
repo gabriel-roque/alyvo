@@ -11,7 +11,7 @@ validade.
 
 Credenciais da demo:
 
-- paciente: CPF `123.456.789-09`, OTP `123456`;
+- paciente: CPF `123.456.789-09`, nascimento `15/01/1990`;
 - administração: `admin@alyvo.local` / `alyvo-demo`;
 - recepção: `recepcao@alyvo.local` / `alyvo-demo`.
 

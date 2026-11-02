@@ -1,159 +1,250 @@
 "use client";
 
-import { BookOpen, CalendarDays, Check, ChevronDown, FileText, MapPin, Paperclip, Send, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarDays, Check, Clock3, Send, ShieldCheck, Sparkles, Stethoscope, UserRound } from "lucide-react";
 import Link from "next/link";
-import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
-import type { Citation, Slot } from "@alyvo/contracts";
+import { FormEvent, useRef, useState } from "react";
 import { Brand } from "@/components/brand";
-import { accessToken, confirmPatientDocument, createChatSession, getAvailability, getPatientDocument, listMyAppointments, registerPatient, sendMessage, startPatientAuth, streamChatEvents, uploadChatAttachment, verifyPatient } from "@/lib/api";
+import {
+  ChatResponse,
+  Citation,
+  confirmChatAction,
+  createChatSession,
+  identifyPatient,
+  registerPatient,
+  requestChatAction,
+  resumeChat,
+  sendMessage,
+} from "@/lib/api";
 
-type FormRequest = { type: "patient_auth" | "availability" | "appointments" };
-type Message = { role: "user" | "assistant"; content: string; streamId?: string; citations?: Citation[]; intent?: string; canTicket?: boolean; form?: FormRequest; toolResult?: Record<string, unknown> | null };
-type Appointment = { id: string; starts_at: string; status: string; reason: string };
-type Review = { id: string; filename: string; status: string; fields: Record<string, string>; confidence: Record<string, number> };
+type ToolItem = {
+  id: string;
+  doctor?: string | { id: string; name: string };
+  unit?: string | { id: string; name: string };
+  starts_at?: string;
+  status?: string;
+  reason?: string;
+};
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  citations?: Citation[];
+  response?: ChatResponse;
+};
 
-const firstAnswer: Message = { role: "assistant", content: "Olá, sou a assistente administrativa da Alyvo. Posso localizar profissionais, explicar convênios e documentos, receber arquivos ou concluir agendamentos aqui na conversa. Como posso ajudar?" };
+const welcome: Message = {
+  role: "assistant",
+  content: "Olá! Posso ajudar com médicos, convênios, exames, horários e suas consultas. Você pode começar sem se identificar.",
+};
+
+function label(value: string | { id: string; name: string } | undefined) {
+  return typeof value === "string" ? value : value?.name ?? "—";
+}
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([firstAnswer]);
+  const [messages, setMessages] = useState<Message[]>([welcome]);
   const [text, setText] = useState("");
   const [session, setSession] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [cpf, setCpf] = useState("123.456.789-09");
-  const [email, setEmail] = useState("juliana.demo@alyvo.local");
-  const [code, setCode] = useState("");
+  const [birthDate, setBirthDate] = useState("1990-01-15");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [registrationToken, setRegistrationToken] = useState("");
-  const [authStep, setAuthStep] = useState<"cpf" | "code" | "register" | "ready">("cpf");
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [selected, setSelected] = useState<Slot | null>(null);
-  const [review, setReview] = useState<Review | null>(null);
-  const [fields, setFields] = useState<Record<string, string>>({});
+  const [authMode, setAuthMode] = useState<"identify" | "register">("identify");
+  const [identifiedName, setIdentifiedName] = useState("");
   const [notice, setNotice] = useState("");
-  const fileInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { if (accessToken()) setAuthStep("ready"); }, []);
+  const streamEnd = useRef<HTMLDivElement>(null);
 
   async function ensureSession() {
-    const id = session ?? await createChatSession();
-    setSession(id);
-    return id;
+    if (session) return session;
+    const created = await createChatSession();
+    setSession(created.id);
+    return created.id;
   }
 
-  async function appendResponse(sessionId: string, response: Awaited<ReturnType<typeof sendMessage>>) {
-    const form = response.form_request as FormRequest | undefined;
-    const streamId = `${Date.now()}-${Math.random()}`;
-    const message: Message = { role: "assistant", content: "", streamId, citations: response.citations, intent: response.intent, canTicket: response.confirmation_request?.type === "ticket", form, toolResult: response.tool_result };
-    setMessages((items) => [...items, message]);
-    let streamed = "";
-    try {
-      await streamChatEvents(sessionId, (event, payload) => {
-        if (event === "token") {
-          streamed += String(payload.text ?? "");
-          setMessages((items) => items.map((item) => item.streamId === streamId ? { ...item, content: streamed } : item));
-        }
-      });
-    } catch {
-      streamed = response.answer;
-    }
-    const finalAnswer = response.ticket_id ? "Ticket criado para a recepção." : streamed || response.answer;
-    setMessages((items) => items.map((item) => item.streamId === streamId ? { ...item, content: finalAnswer } : item));
-    if (form?.type === "availability") await loadOperations();
-    if (form?.type === "appointments") setAppointments(await listMyAppointments());
+  function appendResponse(response: ChatResponse) {
+    setMessages((current) => [...current, { role: "assistant", content: response.answer, citations: response.citations, response }]);
+    window.setTimeout(() => streamEnd.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     const content = text.trim();
     if (!content || loading) return;
-    setMessages((items) => [...items, { role: "user", content }]);
+    setMessages((current) => [...current, { role: "user", content }]);
     setText("");
     setLoading(true);
+    setNotice("");
     try {
-      const sessionId = await ensureSession();
-      await appendResponse(sessionId, await sendMessage(sessionId, content));
+      appendResponse(await sendMessage(await ensureSession(), content));
     } catch (error) {
-      setMessages((items) => [...items, { role: "assistant", content: error instanceof Error ? error.message : "Não foi possível consultar a Alyvo agora." }]);
-    } finally { setLoading(false); }
-  }
-
-  async function loadOperations() {
-    const [available, mine] = await Promise.all([getAvailability(), listMyAppointments()]);
-    setSlots(available); setSelected(available[0] ?? null); setAppointments(mine);
-  }
-
-  async function continueAuthenticated() {
-    const sessionId = await ensureSession();
-    await appendResponse(sessionId, await sendMessage(sessionId, "Quero agendar uma consulta"));
+      setNotice(error instanceof Error ? error.message : "Não foi possível consultar a Alyvo.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function authenticate() {
+    setLoading(true);
+    setNotice("");
     try {
-      setNotice("");
-      if (authStep === "cpf") { await startPatientAuth(cpf, email); setAuthStep("code"); return; }
-      if (authStep === "code") {
-        const result = await verifyPatient(cpf, code);
-        if (result.status === "registration_required") { setRegistrationToken(result.registration_token); setAuthStep("register"); return; }
-        setAuthStep("ready"); await continueAuthenticated(); return;
+      if (authMode === "identify") {
+        const result = await identifyPatient(cpf, birthDate);
+        if (result.status === "registration_required") {
+          setRegistrationToken(result.registration_token ?? "");
+          setAuthMode("register");
+          return;
+        }
+        setIdentifiedName(result.patient?.name ?? "Paciente");
+      } else {
+        const result = await registerPatient({ name, email, registration_token: registrationToken });
+        setIdentifiedName(result.patient.name);
       }
-      await registerPatient({ cpf, name, email, registration_token: registrationToken });
-      setAuthStep("ready"); await continueAuthenticated();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Falha na autenticação"); }
+      if (session) appendResponse(await resumeChat(session));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível confirmar seus dados.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function runAction(action: Record<string, unknown>, label: string) {
+  async function action(tool: string, arguments_: Record<string, unknown>) {
+    setLoading(true);
+    setNotice("");
+    try {
+      appendResponse(await requestChatAction(await ensureSession(), tool, arguments_));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível preparar a operação.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirm(id: string, accepted: boolean) {
     if (!session) return;
     setLoading(true);
     try {
-      setMessages((items) => [...items, { role: "user", content: label }]);
-      await appendResponse(session, await sendMessage(session, label, { action, confirmed: true }));
-      await loadOperations();
-    } finally { setLoading(false); }
+      appendResponse(await confirmChatAction(session, id, accepted));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível concluir a operação.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function upload(file: File) {
-    if (!accessToken()) { setNotice("Confirme sua identidade no formulário da conversa antes de anexar."); return; }
-    setNotice("Enviando e processando o documento…");
-    try {
-      const sessionId = await ensureSession();
-      let item = await uploadChatAttachment(sessionId, file, "insurance_card");
-      for (let attempt = 0; attempt < 225 && ["uploaded", "processing"].includes(item.status); attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        item = await getPatientDocument(item.id);
-      }
-      if (item.status !== "review_required") throw new Error("O OCR não ficou pronto para revisão");
-      setReview(item); setFields(item.fields); setNotice("");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Falha no documento"); }
-  }
+  return (
+    <main className="patient-chat">
+      <header className="chat-header">
+        <Link href="/" className="icon-button" aria-label="Voltar para o início"><ArrowLeft /></Link>
+        <Brand />
+        <span className={identifiedName ? "identity-chip identified" : "identity-chip"}>
+          {identifiedName ? <Check /> : <ShieldCheck />}
+          {identifiedName || "Conversa anônima"}
+        </span>
+      </header>
 
-  function drop(event: DragEvent<HTMLFormElement>) { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void upload(file); }
+      <section className="chat-window" aria-label="Conversa com a Alyvo">
+        <header className="chat-intro">
+          <div className="assistant-mark"><Sparkles /></div>
+          <div><h1>Assistente Alyvo</h1><p>Informação administrativa, agenda e conhecimento da clínica.</p></div>
+          <span><i /> Online</span>
+        </header>
 
-  return <main className="chat-shell">
-    <header className="app-header"><Brand /><nav><Link className="active" href="/chat">Assistente</Link><Link href="/agendar">Agenda</Link><Link href="/backoffice/pacientes">Pacientes</Link><Link href="/backoffice/conhecimento">Conhecimento</Link></nav><div className="profile"><span className="avatar">PA</span><span><strong>Paciente</strong><small>Clínica Alyvo</small></span><ChevronDown size={17} /></div></header>
-    <div className="chat-layout"><aside className="conversation-list"><button className="button button-primary full" onClick={() => { setMessages([firstAnswer]); setSession(undefined); setReview(null); }}><Sparkles size={19} /> Nova conversa</button><p className="nav-label">Sessão atual</p><button className="conversation active">Conversa ponta a ponta <small>agora</small></button></aside>
-      <section className="chat-main" aria-label="Conversa com a Alyvo"><header className="chat-title"><div><h1>Assistente Alyvo <i /> <small>Online</small></h1><p>Respostas e operações baseadas em dados reais da clínica</p></div><span className="trust-badge"><ShieldCheck size={17} /> Administrativo, sem diagnóstico</span></header>
         <div className="message-stream" aria-live="polite">
-          {messages.map((message, index) => <div className={`message-row ${message.role}`} key={`${index}-${message.content.slice(0, 12)}`}><span className="message-avatar">{message.role === "assistant" ? "A" : "EU"}</span><div className="message-bubble"><p>{message.content}</p>
-            {message.form?.type === "patient_auth" && authStep !== "ready" && <div className="chat-inline-form">
-              {authStep === "cpf" && <><label>CPF<input value={cpf} onChange={(event) => setCpf(event.target.value)} /></label><label>E-mail<input value={email} onChange={(event) => setEmail(event.target.value)} /></label></>}
-              {authStep === "code" && <label>Código temporário<input value={code} onChange={(event) => setCode(event.target.value)} /></label>}
-              {authStep === "register" && <><label>Nome<input value={name} onChange={(event) => setName(event.target.value)} /></label><label>E-mail<input value={email} onChange={(event) => setEmail(event.target.value)} /></label></>}
-              <button className="inline-action" onClick={() => void authenticate()}><ShieldCheck size={18} /> {authStep === "cpf" ? "Enviar código" : authStep === "code" ? "Validar código" : "Cadastrar"}</button>
-            </div>}
-            {message.form?.type === "availability" && <div className="chat-options">{slots.slice(0, 8).map((slot) => <button key={slot.id} className={selected?.id === slot.id ? "selected" : ""} onClick={() => setSelected(slot)}><strong>{slot.doctor.name}</strong><span>{new Date(slot.starts_at).toLocaleString("pt-BR")} · {slot.unit.name}</span></button>)}{selected && <button className="inline-action" onClick={() => void runAction({ type: "schedule", doctor_id: selected.doctor.id, starts_at: selected.starts_at, reason: "Consulta" }, "Confirmo este agendamento")}><Check size={18} /> Confirmar agendamento</button>}</div>}
-            {message.form?.type === "appointments" && <div className="chat-options">{appointments.filter((item) => item.status === "confirmed").map((item) => <button key={item.id} onClick={() => void runAction({ type: "cancel", appointment_id: item.id }, "Confirmo o cancelamento")}><strong>{item.reason}</strong><span>{new Date(item.starts_at).toLocaleString("pt-BR")} · cancelar</span></button>)}</div>}
-            {message.canTicket && session && <button className="inline-action" onClick={async () => appendResponse(session, await sendMessage(session, "Quero falar com a recepção", { confirmTicket: true }))}><ShieldCheck size={18} /> Criar ticket</button>}
-            {message.toolResult && <p className="operation-success"><Check size={16} /> Operação concluída e auditada.</p>}
-            {message.citations?.length ? <details className="citations" open><summary><BookOpen size={17} /> Fontes consultadas ({message.citations.length})</summary>{message.citations.map((citation, citationIndex) => <div className="citation" key={`${citation.title}-${citationIndex}`}><span>{citationIndex + 1}</span><p><strong>{citation.title}</strong><small>{citation.source} — {citation.excerpt}</small></p></div>)}</details> : null}
-          </div></div>)}
-          {loading && <div className="message-row assistant"><span className="message-avatar">A</span><div className="typing" aria-label="Alyvo está respondendo"><i /><i /><i /></div></div>}
-          {review && <section className="chat-document panel"><header><Upload size={18} /> Revise a extração de {review.filename}</header>{Object.entries(fields).map(([key, value]) => <label key={key}>{key}<input value={value} onChange={(event) => setFields((current) => ({ ...current, [key]: event.target.value }))} /><small>Confiança: {Math.round((review.confidence[key] ?? 0) * 100)}%</small></label>)}<button className="button button-primary" onClick={async () => { await confirmPatientDocument(review.id, fields); setReview(null); setNotice("Documento confirmado e liberado à recepção."); }}>Confirmar dados</button></section>}
-          {notice && <p className="chat-notice" role="status">{notice}</p>}
-          {messages.length === 1 && <div className="prompt-grid"><button onClick={() => setText("Quais cardiologistas aceitam Vida+ na Unidade Centro?")}><MapPin /> Médicos por convênio</button><button onClick={() => setText("Quero agendar uma consulta de cardiologia")}><CalendarDays /> Agendar consulta</button><button onClick={() => setText("Quais documentos devo levar?")}><FileText /> Documentos necessários</button></div>}
+          {messages.map((message, index) => {
+            const result = message.response?.tool_result;
+            const items = (result?.items ?? []) as ToolItem[];
+            return (
+              <article className={`chat-message ${message.role}`} key={`${index}-${message.content.slice(0, 16)}`}>
+                {message.role === "assistant" && <span className="message-avatar">A</span>}
+                <div className="message-content">
+                  <p>{message.content}</p>
+
+                  {message.response?.auth_required && !identifiedName && (
+                    <section className="identity-card">
+                      <header><UserRound /><div><strong>Confirme sua identidade</strong><small>Seus dados não ficam salvos neste navegador.</small></div></header>
+                      {authMode === "identify" ? (
+                        <div className="form-grid two">
+                          <label>CPF<input inputMode="numeric" value={cpf} onChange={(event) => setCpf(event.target.value)} /></label>
+                          <label>Data de nascimento<input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>
+                        </div>
+                      ) : (
+                        <div className="form-grid two">
+                          <label>Nome completo<input value={name} onChange={(event) => setName(event.target.value)} /></label>
+                          <label>E-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+                        </div>
+                      )}
+                      <button className="button button-primary" disabled={loading} onClick={() => void authenticate()}>
+                        <ShieldCheck /> {authMode === "identify" ? "Continuar" : "Criar cadastro"}
+                      </button>
+                    </section>
+                  )}
+
+                  {result?.type === "availability" && (
+                    <div className="tool-cards">
+                      {items.map((item) => (
+                        <button key={item.id} onClick={() => void action("create_appointment", { doctor_id: typeof item.doctor === "object" ? item.doctor.id : "", starts_at: item.starts_at, reason: "Consulta" })}>
+                          <span className="tool-icon"><CalendarDays /></span>
+                          <span><strong>{label(item.doctor)}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR")} · {label(item.unit)}</small></span>
+                          <span className="tool-action">Agendar</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {result?.type === "appointments" && (
+                    <div className="tool-cards">
+                      {items.map((item) => (
+                        <div className="appointment-tool" key={item.id}>
+                          <span className="tool-icon"><Clock3 /></span>
+                          <span><strong>{label(item.doctor) || item.reason}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR")} · {item.status}</small></span>
+                          {item.status === "confirmed" && <button onClick={() => void action("cancel_appointment", { appointment_id: item.id })}>Cancelar</button>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {message.response?.confirmation_request && (
+                    <section className="confirmation-card">
+                      <strong>Confirmar operação?</strong>
+                      <p>{message.response.confirmation_request.summary}</p>
+                      <div>
+                        <button className="button button-secondary" onClick={() => void confirm(message.response!.confirmation_request!.id, false)}>Voltar</button>
+                        <button className="button button-primary" onClick={() => void confirm(message.response!.confirmation_request!.id, true)}><Check /> Confirmar</button>
+                      </div>
+                    </section>
+                  )}
+
+                  {message.response?.tool_result?.appointment && <p className="operation-success"><Check /> Operação concluída com segurança.</p>}
+
+                  {message.citations?.length ? (
+                    <details className="citations">
+                      <summary><BookOpen /> Fontes consultadas ({message.citations.length})</summary>
+                      {message.citations.map((citation, citationIndex) => <p key={`${citation.title}-${citationIndex}`}><strong>{citation.title}</strong><small>{citation.source} — {citation.excerpt}</small></p>)}
+                    </details>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+          {loading && <div className="chat-message assistant"><span className="message-avatar">A</span><div className="message-skeleton"><i /><i /><i /></div></div>}
+          {notice && <p className="error-text" role="alert">{notice}</p>}
+          {messages.length === 1 && (
+            <div className="suggestion-grid">
+              <button onClick={() => setText("Quais cardiologistas aceitam Vida+?")}><Stethoscope /> Médicos por convênio</button>
+              <button onClick={() => setText("Quero ver horários disponíveis")}><CalendarDays /> Horários disponíveis</button>
+              <button onClick={() => setText("Quais são minhas consultas?")}><UserRound /> Minhas consultas</button>
+            </div>
+          )}
+          <div ref={streamEnd} />
         </div>
-        <form className="composer" onSubmit={submit} onDragOver={(event) => event.preventDefault()} onDrop={drop}><button type="button" className="icon-button" aria-label="Anexar documento" onClick={() => fileInput.current?.click()}><Paperclip /></button><input ref={fileInput} hidden type="file" accept="image/png,image/jpeg,application/pdf" onChange={(event) => event.target.files?.[0] && void upload(event.target.files[0])} /><label className="sr-only" htmlFor="message">Mensagem</label><input id="message" value={text} onChange={(event) => setText(event.target.value)} placeholder="Pergunte, agende, cancele ou arraste um documento…" /><button className="send-button" aria-label="Enviar mensagem" disabled={loading || !text.trim()}><Send /></button></form>
+
+        <form className="chat-composer" onSubmit={submit}>
+          <label className="sr-only" htmlFor="chat-message">Mensagem</label>
+          <input id="chat-message" value={text} onChange={(event) => setText(event.target.value)} placeholder="Pergunte sobre a clínica ou suas consultas…" />
+          <button aria-label="Enviar mensagem" disabled={loading || !text.trim()}><Send /></button>
+        </form>
       </section>
-    </div>
-  </main>;
+    </main>
+  );
 }

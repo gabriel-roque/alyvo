@@ -1,181 +1,89 @@
-import type { ChatResponse, Slot } from "@alyvo/contracts";
-
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 export const TENANT = process.env.NEXT_PUBLIC_DEMO_TENANT ?? "clinic-alyvo";
 
-export function accessToken(): string | null {
-  return typeof window === "undefined" ? null : window.localStorage.getItem("alyvo_access_token");
+let patientToken: string | null = null;
+
+export type Citation = { title: string; source: string; excerpt: string };
+export type ChatResponse = {
+  id: string;
+  answer: string;
+  intent: string;
+  confidence: number;
+  citations: Citation[];
+  auth_required: boolean;
+  confirmation_request?: { id: string; tool: string; summary: string } | null;
+  tool_result?: { type: string; items?: Record<string, unknown>[]; appointment?: Record<string, unknown> } | null;
+  tool_call?: { name: string } | null;
+};
+type BackofficePayload = Record<string, unknown> & { items: never[] };
+
+export function staffAccessToken(): string | null {
+  return typeof window === "undefined" ? null : window.localStorage.getItem("alyvo_staff_access_token");
 }
 
-export function storeTokens(payload: { access_token: string; refresh_token?: string }) {
-  window.localStorage.setItem("alyvo_access_token", payload.access_token);
-  if (payload.refresh_token) window.localStorage.setItem("alyvo_refresh_token", payload.refresh_token);
+export function setPatientToken(token: string) {
+  patientToken = token;
 }
 
-export async function apiFetch(path: string, init: RequestInit = {}) {
-  const token = accessToken();
+export async function apiFetch(path: string, init: RequestInit = {}, token?: string | null) {
   const headers = new Headers(init.headers);
   headers.set("X-Tenant-ID", TENANT);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const resolved = token === undefined ? patientToken ?? staffAccessToken() : token;
+  if (resolved) headers.set("Authorization", `Bearer ${resolved}`);
   return fetch(`${API_URL}${path}`, { ...init, headers, cache: "no-store" });
 }
 
-export async function createChatSession(): Promise<string> {
-  const response = await apiFetch(`/chat/sessions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenant_id: TENANT }),
-  });
-  if (!response.ok) throw new Error("Não foi possível iniciar a conversa");
-  return (await response.json()).id;
-}
-
-export async function sendMessage(sessionId: string, content: string, options: { confirmTicket?: boolean; confirmed?: boolean; action?: Record<string, unknown> } = {}): Promise<ChatResponse> {
-  const response = await apiFetch(`/chat/sessions/${sessionId}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, confirm_ticket: options.confirmTicket ?? false, confirmed: options.confirmed ?? false, action: options.action }),
-  });
-  if (!response.ok) throw new Error("A assistente está temporariamente indisponível");
+async function json<T>(response: Response, fallback: string): Promise<T> {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail ?? fallback);
+  }
   return response.json();
 }
 
-export async function streamChatEvents(sessionId: string, onEvent: (event: string, payload: Record<string, unknown>) => void) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 15_000);
-  try {
-    const response = await apiFetch(`/chat/sessions/${sessionId}/events`, { headers: { Accept: "text/event-stream" }, signal: controller.signal });
-    if (!response.ok || !response.body) throw new Error("Streaming indisponível");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      buffer = (buffer + decoder.decode(value, { stream: !done })).replaceAll("\r\n", "\n");
-      const blocks = buffer.split("\n\n");
-      buffer = blocks.pop() ?? "";
-      for (const block of blocks) {
-        const event = block.match(/^event:\s*(.+)$/m)?.[1] ?? "message";
-        const data = block.match(/^data:\s*(.+)$/m)?.[1];
-        if (data) onEvent(event, JSON.parse(data));
-        if (event === "completed" || event === "error") { await reader.cancel(); return; }
-      }
-      if (done) break;
-    }
-  } finally { window.clearTimeout(timeout); }
+export async function createChatSession() {
+  return json<{ id: string }>(await apiFetch("/chat/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tenant_id: TENANT }) }, patientToken), "Não foi possível iniciar a conversa");
 }
 
-export async function uploadChatAttachment(sessionId: string, file: File, kind: string) {
-  const body = new FormData();
-  body.append("file", file);
-  body.append("kind", kind);
-  const response = await apiFetch(`/chat/sessions/${sessionId}/attachments`, { method: "POST", body });
-  if (!response.ok) throw new Error((await response.json()).detail ?? "Falha no upload");
-  return response.json();
+export async function sendMessage(sessionId: string, content: string) {
+  return json<ChatResponse>(await apiFetch(`/chat/sessions/${sessionId}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) }, patientToken), "A assistente está temporariamente indisponível");
 }
 
-export async function getAvailability(): Promise<Slot[]> {
-  const response = await apiFetch(`/availability?tenant_id=${TENANT}`);
-  if (!response.ok) throw new Error("Não foi possível consultar a agenda");
-  return (await response.json()).items;
+export async function resumeChat(sessionId: string) {
+  return json<ChatResponse>(await apiFetch(`/chat/sessions/${sessionId}/resume`, { method: "POST" }, patientToken), "Não foi possível retomar a solicitação");
 }
 
-export async function startPatientAuth(cpf: string, email?: string) {
-  const response = await apiFetch("/auth/patient/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenant_id: TENANT, cpf, email }),
-  });
-  if (!response.ok) throw new Error("Não foi possível enviar o código");
-  return response.json();
+export async function requestChatAction(sessionId: string, tool: string, arguments_: Record<string, unknown>) {
+  return json<ChatResponse>(await apiFetch(`/chat/sessions/${sessionId}/actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool, arguments: arguments_ }) }, patientToken), "Não foi possível preparar a operação");
 }
 
-export async function verifyPatient(cpf: string, code: string) {
-  const response = await apiFetch("/auth/patient/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenant_id: TENANT, cpf, code }),
-  });
-  if (!response.ok) throw new Error("Código inválido ou expirado");
-  const payload = await response.json();
-  if (payload.access_token) storeTokens(payload);
+export async function confirmChatAction(sessionId: string, confirmationId: string, accepted = true) {
+  return json<ChatResponse>(await apiFetch(`/chat/sessions/${sessionId}/confirmations/${confirmationId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accepted }) }, patientToken), "Não foi possível concluir a operação");
+}
+
+export async function identifyPatient(cpf: string, birthDate: string) {
+  const payload = await json<{ status: string; access_token?: string; registration_token?: string; patient?: { name: string } }>(await apiFetch("/auth/patient/identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tenant_id: TENANT, cpf, birth_date: birthDate }) }, null), "CPF ou data de nascimento inválidos");
+  if (payload.access_token) setPatientToken(payload.access_token);
   return payload;
 }
 
-export async function registerPatient(payload: { cpf: string; name: string; email: string; registration_token: string }) {
-  const response = await apiFetch("/auth/patient/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenant_id: TENANT, ...payload }),
-  });
-  if (!response.ok) throw new Error((await response.json()).detail ?? "Não foi possível concluir o cadastro");
-  const tokens = await response.json();
-  storeTokens(tokens);
-  return tokens;
-}
-
-export async function createAppointment(slot: Slot) {
-  const response = await apiFetch("/appointments", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ doctor_id: slot.doctor.id, starts_at: slot.starts_at, reason: "Consulta", confirmed: true }),
-  });
-  if (!response.ok) throw new Error((await response.json()).detail ?? "Não foi possível agendar");
-  return response.json();
-}
-
-export async function listMyAppointments() {
-  const response = await apiFetch("/appointments/me");
-  if (!response.ok) throw new Error("Não foi possível consultar seus agendamentos");
-  return (await response.json()).items;
-}
-
-export async function cancelAppointment(id: string) {
-  const response = await apiFetch(`/appointments/${id}/cancel?confirmed=true`, { method: "POST" });
-  if (!response.ok) throw new Error((await response.json()).detail ?? "Não foi possível cancelar");
-  return response.json();
-}
-
-export async function uploadPatientDocument(file: File, kind: string) {
-  const body = new FormData();
-  body.append("file", file);
-  body.append("kind", kind);
-  const response = await apiFetch("/patient/documents", { method: "POST", body });
-  if (!response.ok) throw new Error((await response.json()).detail ?? "Falha no upload");
-  return response.json();
-}
-
-export async function getPatientDocument(id: string) {
-  const response = await apiFetch(`/patient/documents/${id}`);
-  if (!response.ok) throw new Error("Documento indisponível");
-  return response.json();
-}
-
-export async function confirmPatientDocument(id: string, fields: Record<string, string>) {
-  const response = await apiFetch(`/patient/documents/${id}/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fields, confirmed: true }),
-  });
-  if (!response.ok) throw new Error("Não foi possível confirmar o documento");
-  return response.json();
+export async function registerPatient(payload: { name: string; email: string; registration_token: string }) {
+  const result = await json<{ access_token: string; patient: { name: string } }>(await apiFetch("/auth/patient/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tenant_id: TENANT, ...payload }) }, null), "Não foi possível concluir o cadastro");
+  setPatientToken(result.access_token);
+  return result;
 }
 
 export async function staffLogin(email: string, password: string) {
-  const response = await apiFetch("/auth/staff/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenant_id: TENANT, email, password }),
-  });
-  if (!response.ok) throw new Error("Credenciais inválidas");
-  const payload = await response.json();
-  storeTokens(payload);
+  const payload = await json<{ access_token: string; refresh_token?: string }>(await apiFetch("/auth/staff/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tenant_id: TENANT, email, password }) }, null), "Credenciais inválidas");
+  window.localStorage.setItem("alyvo_staff_access_token", payload.access_token);
+  if (payload.refresh_token) window.localStorage.setItem("alyvo_staff_refresh_token", payload.refresh_token);
   return payload;
 }
 
 export async function backofficeGet(path: string) {
-  const response = await apiFetch(`/backoffice${path}`);
-  if (!response.ok) throw new Error("Acesso ao backoffice não autorizado");
-  return response.json();
+  return json<BackofficePayload>(await apiFetch(`/backoffice${path}`, {}, staffAccessToken()), "Acesso ao backoffice não autorizado");
 }
 
+export async function backofficeMutate(path: string, init: RequestInit) {
+  return json<Record<string, unknown>>(await apiFetch(`/backoffice${path}`, init, staffAccessToken()), "Não foi possível concluir a operação");
+}

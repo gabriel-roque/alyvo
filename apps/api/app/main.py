@@ -1,4 +1,3 @@
-import smtplib
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -57,7 +56,7 @@ async def correlation_id(request: Request, call_next):
             tenant_id = decode_token(authorization.removeprefix("Bearer "))["tenant"]
         except Exception:
             pass
-    if request.url.path.endswith(("/patient/start", "/patient/verify", "/patient/register", "/staff/login", "/refresh")):
+    if request.url.path.endswith(("/patient/identify", "/patient/register", "/staff/login", "/refresh")):
         operation_name = request.url.path.rsplit("/", 2)[-2:]
         limiter.check(f"auth:{':'.join(operation_name)}:{request.client.host if request.client else 'unknown'}", 10)
     elif "/chat/" in request.url.path and request.method == "POST":
@@ -111,7 +110,6 @@ def deep_health():
         "redis": "ok",
         "neo4j": "ok",
         "minio": "ok",
-        "mailpit": "ok",
         "ollama": "ok",
     }
     try:
@@ -139,11 +137,6 @@ def deep_health():
         object_storage_provider()
     except Exception:
         services["minio"] = "unavailable"
-    try:
-        with smtplib.SMTP(get_settings().smtp_host, get_settings().smtp_port, timeout=3):
-            pass
-    except Exception:
-        services["mailpit"] = "unavailable"
     if get_settings().llm_provider == "ollama":
         try:
             response = httpx.get(f"{get_settings().ollama_base_url}/api/tags", timeout=3)

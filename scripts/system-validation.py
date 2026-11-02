@@ -36,7 +36,12 @@ def main() -> None:
         graph_evidence = ""
         for _ in range(30):
             session = assert_ok(client.post(f"{API}/chat/sessions", json={"tenant_id": TENANT}))["id"]
-            answer = assert_ok(client.post(f"{API}/chat/sessions/{session}/messages", json={"content": f"Onde {doctor_name} atende?"}))
+            answer = assert_ok(
+                client.post(
+                    f"{API}/chat/sessions/{session}/messages",
+                    json={"content": f"Use search_knowledge no cadastro aprovado: em qual unidade trabalha {doctor_name}?"},
+                )
+            )
             graph_evidence = answer["answer"] + " " + " ".join(item["excerpt"] for item in answer["citations"])
             if doctor_name in graph_evidence:
                 break
@@ -57,7 +62,12 @@ def main() -> None:
         ingestion = assert_ok(client.post(f"{API}/backoffice/ingestions", headers=admin, json={"title": "Documento rejeitado E2E", "content": rejected_marker}))
         assert_ok(client.post(f"{API}/backoffice/ingestions/{ingestion['id']}/reject", headers=admin))
         session = assert_ok(client.post(f"{API}/chat/sessions", json={"tenant_id": TENANT}))["id"]
-        rejected_answer = assert_ok(client.post(f"{API}/chat/sessions/{session}/messages", json={"content": rejected_marker}))
+        rejected_answer = assert_ok(
+            client.post(
+                f"{API}/chat/sessions/{session}/messages",
+                json={"content": f"Use search_knowledge para procurar exatamente: {rejected_marker}"},
+            )
+        )
         rejected_evidence = " ".join(item["excerpt"] for item in rejected_answer["citations"])
         assert rejected_marker not in rejected_evidence, "Ingestão rejeitada vazou para recuperação"
 
@@ -79,12 +89,11 @@ def main() -> None:
                 relationships = set(graph.run("MATCH (a {tenant_id: $tenant})-[r]->(b {tenant_id: $tenant}) RETURN DISTINCT type(r)", tenant=TENANT).value())
                 vector_indexes = graph.run("SHOW VECTOR INDEXES YIELD name WHERE name = 'knowledge_chunk_embedding' RETURN count(*) AS count").single()["count"]
         assert matches == 0, "Ingestão rejeitada alterou o GraphRAG"
-        assert {"Clinic", "Unit", "Doctor", "Specialty", "Insurer", "Exam", "Service", "Document", "Chunk"} <= labels
-        assert {"WORKS_AT", "HAS_SPECIALTY", "ACCEPTS", "PERFORMS", "OFFERS", "BELONGS_TO", "HAS_DOCUMENT", "HAS_CHUNK", "MENTIONS", "SUPPORTED_BY"} <= relationships
+        assert {"Clinic", "Unit", "Doctor", "Specialty", "Insurer", "Exam", "Document", "Chunk"} <= labels
+        assert {"WORKS_AT", "HAS_SPECIALTY", "ACCEPTS", "PERFORMS", "BELONGS_TO", "HAS_DOCUMENT", "HAS_CHUNK", "MENTIONS", "SUPPORTED_BY"} <= relationships
         assert vector_indexes == 1
 
-        assert_ok(client.post(f"{API}/auth/patient/start", json={"tenant_id": TENANT, "cpf": "123.456.789-09"}))
-        patient = assert_ok(client.post(f"{API}/auth/patient/verify", json={"tenant_id": TENANT, "cpf": "123.456.789-09", "code": "123456"}))
+        patient = assert_ok(client.post(f"{API}/auth/patient/identify", json={"tenant_id": TENANT, "cpf": "123.456.789-09", "birth_date": "1990-01-15"}))
         patient_headers = {"Authorization": f"Bearer {patient['access_token']}", "X-Tenant-ID": TENANT}
         slot = assert_ok(client.get(f"{API}/availability?tenant_id={TENANT}"))["items"][0]
         reason = f"Concorrência E2E {marker}"

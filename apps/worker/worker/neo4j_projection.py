@@ -75,7 +75,6 @@ class Neo4jProjector:
             "units": "Unit",
             "insurers": "Insurer",
             "exams": "Exam",
-            "services": "Service",
             "knowledge": "Document",
         }
         label = labels.get(kind)
@@ -189,7 +188,7 @@ class Neo4jProjector:
                 ).consume()
 
     def _catalog(self, kind: str, tenant_id: str, payload: dict) -> None:
-        labels = {"specialties": "Specialty", "units": "Unit", "insurers": "Insurer", "exams": "Exam", "services": "Service"}
+        labels = {"specialties": "Specialty", "units": "Unit", "insurers": "Insurer", "exams": "Exam"}
         label = labels.get(kind)
         if not label:
             return
@@ -217,20 +216,5 @@ class Neo4jProjector:
                     MERGE (u)-[:PERFORMS]->(e)
                     """,
                     id=payload["id"], tenant_id=tenant_id, unit_ids=payload.get("unit_ids", []),
-                ).consume()
-            elif kind == "services":
-                session.run(
-                    """
-                    MATCH (service:Service {id: $id, tenant_id: $tenant_id})
-                    MATCH (clinic:Clinic {id: $tenant_id, tenant_id: $tenant_id})
-                    MERGE (clinic)-[:OFFERS]->(service)
-                    WITH service
-                    OPTIONAL MATCH (service)-[old:HAS_SPECIALTY]->(:Specialty) DELETE old
-                    WITH service
-                    OPTIONAL MATCH (specialty:Specialty {id: $specialty_id, tenant_id: $tenant_id})
-                    FOREACH (_ IN CASE WHEN specialty IS NULL THEN [] ELSE [1] END |
-                        MERGE (service)-[:HAS_SPECIALTY]->(specialty))
-                    """,
-                    id=payload["id"], tenant_id=tenant_id, specialty_id=payload.get("specialty_id"),
                 ).consume()
 

@@ -55,7 +55,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/patient/start": {
+    "/api/v1/auth/patient/identify": {
         parameters: {
             query?: never;
             header?: never;
@@ -64,25 +64,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start Patient Auth */
-        post: operations["start_patient_auth_api_v1_auth_patient_start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/patient/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Verify Patient */
-        post: operations["verify_patient_api_v1_auth_patient_verify_post"];
+        /** Identify Patient */
+        post: operations["identify_patient_api_v1_auth_patient_identify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -242,58 +225,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/patient/documents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Patient Documents */
-        get: operations["list_patient_documents_api_v1_patient_documents_get"];
-        put?: never;
-        /** Upload Patient Document */
-        post: operations["upload_patient_document_api_v1_patient_documents_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patient/documents/{document_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Patient Document */
-        get: operations["get_patient_document_api_v1_patient_documents__document_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patient/documents/{document_id}/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Confirm Patient Document */
-        post: operations["confirm_patient_document_api_v1_patient_documents__document_id__confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/chat/sessions": {
         parameters: {
             query?: never;
@@ -328,24 +259,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/chat/sessions/{session_id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream Events */
-        get: operations["stream_events_api_v1_chat_sessions__session_id__events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/sessions/{session_id}/attachments": {
+    "/api/v1/chat/sessions/{session_id}/resume": {
         parameters: {
             query?: never;
             header?: never;
@@ -354,8 +268,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload Attachment */
-        post: operations["upload_attachment_api_v1_chat_sessions__session_id__attachments_post"];
+        /** Resume */
+        post: operations["resume_api_v1_chat_sessions__session_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/sessions/{session_id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Action */
+        post: operations["request_action_api_v1_chat_sessions__session_id__actions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/sessions/{session_id}/confirmations/{confirmation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Action */
+        post: operations["confirm_action_api_v1_chat_sessions__session_id__confirmations__confirmation_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -396,6 +344,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backoffice/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Staff Appointment */
+        post: operations["create_staff_appointment_api_v1_backoffice_appointments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/appointments/{appointment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Staff Appointment */
+        patch: operations["update_staff_appointment_api_v1_backoffice_appointments__appointment_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/backoffice/appointments/{appointment_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Staff Appointment */
+        post: operations["cancel_staff_appointment_api_v1_backoffice_appointments__appointment_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/backoffice/doctors": {
         parameters: {
             query?: never;
@@ -425,8 +424,8 @@ export interface paths {
         /** Update Doctor */
         put: operations["update_doctor_api_v1_backoffice_doctors__doctor_id__put"];
         post?: never;
-        /** Delete Doctor */
-        delete: operations["delete_doctor_api_v1_backoffice_doctors__doctor_id__delete"];
+        /** Archive Doctor */
+        delete: operations["archive_doctor_api_v1_backoffice_doctors__doctor_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -460,8 +459,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Catalog */
-        delete: operations["delete_catalog_api_v1_backoffice_catalog__kind___item_id__delete"];
+        /** Archive Catalog */
+        delete: operations["archive_catalog_api_v1_backoffice_catalog__kind___item_id__delete"];
         options?: never;
         head?: never;
         /** Update Catalog */
@@ -485,21 +484,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/patient-documents": {
+    "/api/v1/backoffice/availability-rules": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Patient Documents */
-        get: operations["patient_documents_api_v1_backoffice_patient_documents_get"];
+        /** Availability Rules */
+        get: operations["availability_rules_api_v1_backoffice_availability_rules_get"];
         put?: never;
-        post?: never;
+        /** Create Rule */
+        post: operations["create_rule_api_v1_backoffice_availability_rules_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/availability-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Rule */
+        delete: operations["delete_rule_api_v1_backoffice_availability_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Rule */
+        patch: operations["update_rule_api_v1_backoffice_availability_rules__rule_id__patch"];
         trace?: never;
     };
     "/api/v1/backoffice/availability-blocks": {
@@ -512,8 +530,8 @@ export interface paths {
         /** Availability Blocks */
         get: operations["availability_blocks_api_v1_backoffice_availability_blocks_get"];
         put?: never;
-        /** Create Availability Block */
-        post: operations["create_availability_block_api_v1_backoffice_availability_blocks_post"];
+        /** Create Block */
+        post: operations["create_block_api_v1_backoffice_availability_blocks_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -530,60 +548,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Availability Block */
-        delete: operations["delete_availability_block_api_v1_backoffice_availability_blocks__block_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/tickets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tickets */
-        get: operations["tickets_api_v1_backoffice_tickets_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/tickets/{ticket_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Ticket */
-        patch: operations["update_ticket_api_v1_backoffice_tickets__ticket_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/backoffice/ingestions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ingestions */
-        get: operations["ingestions_api_v1_backoffice_ingestions_get"];
-        put?: never;
-        /** Create Ingestion */
-        post: operations["create_ingestion_api_v1_backoffice_ingestions_post"];
-        delete?: never;
+        /** Delete Block */
+        delete: operations["delete_block_api_v1_backoffice_availability_blocks__block_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -600,6 +566,24 @@ export interface paths {
         put?: never;
         /** Upload Ingestion */
         post: operations["upload_ingestion_api_v1_backoffice_ingestions_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/ingestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ingestions */
+        get: operations["ingestions_api_v1_backoffice_ingestions_get"];
+        put?: never;
+        /** Create Text Ingestion */
+        post: operations["create_text_ingestion_api_v1_backoffice_ingestions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -640,98 +624,19 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Graph */
-        get: operations["graph_api_v1_backoffice_graph_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Audit */
-        get: operations["audit_api_v1_backoffice_audit_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/clinic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Clinic */
-        get: operations["clinic_api_v1_backoffice_clinic_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Clinic */
-        patch: operations["update_clinic_api_v1_backoffice_clinic_patch"];
-        trace?: never;
-    };
-    "/api/v1/backoffice/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Staff Users */
-        get: operations["staff_users_api_v1_backoffice_users_get"];
-        put?: never;
-        /** Create Staff User */
-        post: operations["create_staff_user_api_v1_backoffice_users_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/users/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Staff User */
-        delete: operations["delete_staff_user_api_v1_backoffice_users__user_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Staff User */
-        patch: operations["update_staff_user_api_v1_backoffice_users__user_id__patch"];
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActionCreate */
+        ActionCreate: {
+            /** Tool */
+            tool: string;
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+        };
         /** AppointmentCreate */
         AppointmentCreate: {
             /** Doctor Id */
@@ -749,57 +654,8 @@ export interface components {
             /** Confirmed */
             confirmed: boolean;
         };
-        /** AppointmentListResponse */
-        AppointmentListResponse: {
-            /** Items */
-            items: components["schemas"]["AppointmentView"][];
-        };
-        /** AppointmentView */
-        AppointmentView: {
-            /** Id */
-            id: string;
-            /** Doctor Id */
-            doctor_id: string;
-            /** Unit Id */
-            unit_id: string;
-            /**
-             * Starts At
-             * Format: date-time
-             */
-            starts_at: string;
-            /**
-             * Ends At
-             * Format: date-time
-             */
-            ends_at: string;
-            /** Status */
-            status: string;
-            /** Reason */
-            reason: string;
-        };
-        /** AuthResponse */
-        AuthResponse: {
-            /** Access Token */
-            access_token?: string | null;
-            /** Refresh Token */
-            refresh_token?: string | null;
-            /** Token Type */
-            token_type?: string | null;
-            /** Status */
-            status?: string | null;
-            /** Registration Token */
-            registration_token?: string | null;
-            /** Patient */
-            patient?: {
-                [key: string]: unknown;
-            } | null;
-            /** User */
-            user?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** AvailabilityBlockCreate */
-        AvailabilityBlockCreate: {
+        /** AvailabilityBlockPayload */
+        AvailabilityBlockPayload: {
             /** Doctor Id */
             doctor_id: string;
             /**
@@ -818,39 +674,38 @@ export interface components {
              */
             reason: string;
         };
-        /** AvailabilityResponse */
-        AvailabilityResponse: {
-            /** Items */
-            items: components["schemas"]["AvailabilitySlot"][];
-            /** Source */
-            source: string;
-        };
-        /** AvailabilitySlot */
-        AvailabilitySlot: {
-            /** Id */
-            id: string;
-            doctor: components["schemas"]["SlotDoctor"];
-            unit: components["schemas"]["SlotUnit"];
+        /** AvailabilityRulePayload */
+        AvailabilityRulePayload: {
+            /** Doctor Id */
+            doctor_id: string;
+            /** Unit Id */
+            unit_id: string;
+            /** Weekday */
+            weekday: number;
             /**
              * Starts At
-             * Format: date-time
+             * Format: time
              */
             starts_at: string;
             /**
              * Ends At
-             * Format: date-time
+             * Format: time
              */
             ends_at: string;
-        };
-        /** Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post */
-        Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post: {
-            /** File */
-            file: string;
             /**
-             * Kind
-             * @default insurance_card
+             * Slot Minutes
+             * @default 30
              */
-            kind: string;
+            slot_minutes: number;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid Until */
+            valid_until?: string | null;
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
         };
         /** Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post */
         Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post: {
@@ -859,18 +714,8 @@ export interface components {
             /** Title */
             title: string;
         };
-        /** Body_upload_patient_document_api_v1_patient_documents_post */
-        Body_upload_patient_document_api_v1_patient_documents_post: {
-            /** File */
-            file: string;
-            /**
-             * Kind
-             * @default insurance_card
-             */
-            kind: string;
-        };
-        /** CatalogCreate */
-        CatalogCreate: {
+        /** CatalogPayload */
+        CatalogPayload: {
             /** Name */
             name: string;
             /**
@@ -884,88 +729,25 @@ export interface components {
              */
             address: string;
             /**
-             * Duration Minutes
-             * @default 30
+             * Preparation
+             * @default
              */
-            duration_minutes: number;
-            /** Specialty Id */
-            specialty_id?: string | null;
-            /**
-             * Unit Ids
-             * @default []
-             */
-            unit_ids: string[];
-        };
-        /** CatalogUpdate */
-        CatalogUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Address */
-            address?: string | null;
-            /** Duration Minutes */
-            duration_minutes?: number | null;
-            /** Specialty Id */
-            specialty_id?: string | null;
+            preparation: string;
             /** Unit Ids */
-            unit_ids?: string[] | null;
-        };
-        /** ChatResponse */
-        ChatResponse: {
-            /** Id */
-            id: string;
-            /** Answer */
-            answer: string;
-            /** Intent */
-            intent: string;
-            /** Confidence */
-            confidence: number;
-            /** Citations */
-            citations: components["schemas"]["Citation"][];
-            /** Form Request */
-            form_request?: {
-                [key: string]: unknown;
-            } | null;
-            /** Confirmation Request */
-            confirmation_request?: {
-                [key: string]: unknown;
-            } | null;
-            /** Ticket Id */
-            ticket_id?: string | null;
-            /** Tool Result */
-            tool_result?: {
-                [key: string]: unknown;
-            } | null;
-            /** Graph Trace */
-            graph_trace: string[];
-        };
-        /** Citation */
-        Citation: {
-            /** Title */
-            title: string;
-            /** Source */
-            source: string;
-            /** Excerpt */
-            excerpt: string;
-        };
-        /** ClinicUpdate */
-        ClinicUpdate: {
-            /** Name */
-            name: string;
+            unit_ids?: string[];
             /**
-             * Timezone
-             * @default America/Sao_Paulo
+             * Active
+             * @default true
              */
-            timezone: string;
-            /**
-             * Cancellation Notice Hours
-             * @default 0
-             */
-            cancellation_notice_hours: number;
+            active: boolean;
         };
-        /** DoctorCreate */
-        DoctorCreate: {
+        /** ConfirmationBody */
+        ConfirmationBody: {
+            /** Accepted */
+            accepted: boolean;
+        };
+        /** DoctorPayload */
+        DoctorPayload: {
             /** Name */
             name: string;
             /** Crm */
@@ -974,98 +756,23 @@ export interface components {
             specialty_id: string;
             /** Unit Id */
             unit_id: string;
+            /** Insurer Ids */
+            insurer_ids?: string[];
             /**
-             * Insurer Ids
-             * @default []
+             * Active
+             * @default true
              */
-            insurer_ids: string[];
-        };
-        /** DoctorDirectoryResponse */
-        DoctorDirectoryResponse: {
-            /** Items */
-            items: components["schemas"]["DoctorView"][];
-        };
-        /** DoctorView */
-        DoctorView: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Crm */
-            crm: string;
-            /** Specialty */
-            specialty: string;
-            /** Unit */
-            unit: string;
-            /** Insurers */
-            insurers: string[];
-        };
-        /** DocumentConfirm */
-        DocumentConfirm: {
-            /** Fields */
-            fields: {
-                [key: string]: string;
-            };
-            /** Confirmed */
-            confirmed: boolean;
-        };
-        /** DocumentListResponse */
-        DocumentListResponse: {
-            /** Items */
-            items: components["schemas"]["DocumentView"][];
-        };
-        /** DocumentView */
-        DocumentView: {
-            /** Id */
-            id: string;
-            /** Kind */
-            kind: string;
-            /** Filename */
-            filename: string;
-            /** Fields */
-            fields: {
-                [key: string]: string;
-            };
-            /** Confidence */
-            confidence: {
-                [key: string]: number;
-            };
-            /** Confirmed */
-            confirmed: boolean;
-            /** Status */
-            status: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** File Url */
-            file_url?: string | null;
+            active: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** IngestionCreate */
-        IngestionCreate: {
-            /** Title */
-            title: string;
-            /** Content */
-            content: string;
-            /**
-             * Source
-             * @default Upload administrativo
-             */
-            source: string;
-        };
         /** IngestionReview */
         IngestionReview: {
-            /**
-             * Entities
-             * @default []
-             */
-            entities: {
+            /** Entities */
+            entities?: {
                 [key: string]: unknown;
             }[];
             /** Confirmed */
@@ -1080,20 +787,21 @@ export interface components {
         MessageCreate: {
             /** Content */
             content: string;
+        };
+        /** PatientIdentify */
+        PatientIdentify: {
             /**
-             * Confirm Ticket
-             * @default false
+             * Tenant Id
+             * @default clinic-alyvo
              */
-            confirm_ticket: boolean;
+            tenant_id: string;
+            /** Cpf */
+            cpf: string;
             /**
-             * Confirmed
-             * @default false
+             * Birth Date
+             * Format: date
              */
-            confirmed: boolean;
-            /** Action */
-            action?: {
-                [key: string]: unknown;
-            } | null;
+            birth_date: string;
         };
         /** PatientRegister */
         PatientRegister: {
@@ -1102,8 +810,6 @@ export interface components {
              * @default clinic-alyvo
              */
             tenant_id: string;
-            /** Cpf */
-            cpf: string;
             /** Name */
             name: string;
             /** Email */
@@ -1111,51 +817,11 @@ export interface components {
             /** Registration Token */
             registration_token: string;
         };
-        /** PatientStart */
-        PatientStart: {
-            /**
-             * Tenant Id
-             * @default clinic-alyvo
-             */
-            tenant_id: string;
-            /** Cpf */
-            cpf: string;
-            /** Email */
-            email?: string | null;
-        };
-        /** PatientStartResponse */
-        PatientStartResponse: {
-            /** Status */
-            status: string;
-            /** Expires In */
-            expires_in: number;
-            /** Delivery */
-            delivery: string;
-            /** Demo Code */
-            demo_code?: string | null;
-        };
-        /** PatientVerify */
-        PatientVerify: {
-            /**
-             * Tenant Id
-             * @default clinic-alyvo
-             */
-            tenant_id: string;
-            /** Cpf */
-            cpf: string;
-            /** Code */
-            code: string;
-        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
         };
-        /**
-         * Role
-         * @enum {string}
-         */
-        Role: "admin" | "receptionist" | "patient";
         /** SessionCreate */
         SessionCreate: {
             /**
@@ -1164,23 +830,22 @@ export interface components {
              */
             tenant_id: string;
         };
-        /** SlotDoctor */
-        SlotDoctor: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Crm */
-            crm: string;
-        };
-        /** SlotUnit */
-        SlotUnit: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Address */
-            address: string;
+        /** StaffAppointmentPayload */
+        StaffAppointmentPayload: {
+            /** Patient Id */
+            patient_id: string;
+            /** Doctor Id */
+            doctor_id: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Reason
+             * @default Consulta
+             */
+            reason: string;
         };
         /** StaffLogin */
         StaffLogin: {
@@ -1194,30 +859,12 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** StaffUserCreate */
-        StaffUserCreate: {
-            /** Name */
-            name: string;
-            /** Email */
-            email: string;
-            role: components["schemas"]["Role"];
-            /** Password */
-            password: string;
-        };
-        /** StaffUserUpdate */
-        StaffUserUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Email */
-            email?: string | null;
-            role?: components["schemas"]["Role"] | null;
-            /** Password */
-            password?: string | null;
-        };
-        /** TicketUpdate */
-        TicketUpdate: {
-            /** Status */
-            status: string;
+        /** TextIngestionPayload */
+        TextIngestionPayload: {
+            /** Title */
+            title: string;
+            /** Content */
+            content: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1301,7 +948,7 @@ export interface operations {
             };
         };
     };
-    start_patient_auth_api_v1_auth_patient_start_post: {
+    identify_patient_api_v1_auth_patient_identify_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1310,7 +957,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PatientStart"];
+                "application/json": components["schemas"]["PatientIdentify"];
             };
         };
         responses: {
@@ -1320,40 +967,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PatientStartResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    verify_patient_api_v1_auth_patient_verify_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatientVerify"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1386,7 +1000,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1419,7 +1033,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1452,7 +1066,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1514,7 +1128,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DoctorDirectoryResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1532,6 +1146,8 @@ export interface operations {
         parameters: {
             query?: {
                 day?: string | null;
+                from_date?: string | null;
+                to_date?: string | null;
                 doctor_id?: string | null;
                 specialty_id?: string | null;
                 unit_id?: string | null;
@@ -1549,7 +1165,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AvailabilityResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1584,7 +1200,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AppointmentView"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1615,7 +1231,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AppointmentListResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1650,143 +1266,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AppointmentView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_patient_documents_api_v1_patient_documents_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_patient_document_api_v1_patient_documents_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_patient_document_api_v1_patient_documents_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_patient_document_api_v1_patient_documents__document_id__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    confirm_patient_document_api_v1_patient_documents__document_id__confirm_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentConfirm"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentView"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1858,7 +1338,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1872,7 +1352,7 @@ export interface operations {
             };
         };
     };
-    stream_events_api_v1_chat_sessions__session_id__events_get: {
+    resume_api_v1_chat_sessions__session_id__resume_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1905,7 +1385,7 @@ export interface operations {
             };
         };
     };
-    upload_attachment_api_v1_chat_sessions__session_id__attachments_post: {
+    request_action_api_v1_chat_sessions__session_id__actions_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1918,12 +1398,50 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_attachment_api_v1_chat_sessions__session_id__attachments_post"];
+                "application/json": components["schemas"]["ActionCreate"];
             };
         };
         responses: {
             /** @description Successful Response */
-            202: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_action_api_v1_chat_sessions__session_id__confirmations__confirmation_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+                confirmation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1975,10 +1493,12 @@ export interface operations {
     };
     agenda_api_v1_backoffice_agenda_get: {
         parameters: {
-            query?: {
-                day?: string | null;
+            query: {
+                start: string;
+                end: string;
                 doctor_id?: string | null;
                 unit_id?: string | null;
+                status?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -2008,9 +1528,117 @@ export interface operations {
             };
         };
     };
-    doctors_api_v1_backoffice_doctors_get: {
+    create_staff_appointment_api_v1_backoffice_appointments_post: {
         parameters: {
             query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAppointmentPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_staff_appointment_api_v1_backoffice_appointments__appointment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                appointment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAppointmentPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_staff_appointment_api_v1_backoffice_appointments__appointment_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                appointment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    doctors_api_v1_backoffice_doctors_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                include_inactive?: boolean;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -2050,7 +1678,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DoctorCreate"];
+                "application/json": components["schemas"]["DoctorPayload"];
             };
         };
         responses: {
@@ -2087,7 +1715,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DoctorCreate"];
+                "application/json": components["schemas"]["DoctorPayload"];
             };
         };
         responses: {
@@ -2111,7 +1739,7 @@ export interface operations {
             };
         };
     };
-    delete_doctor_api_v1_backoffice_doctors__doctor_id__delete: {
+    archive_doctor_api_v1_backoffice_doctors__doctor_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -2144,7 +1772,12 @@ export interface operations {
     };
     list_catalog_api_v1_backoffice_catalog__kind__get: {
         parameters: {
-            query?: never;
+            query?: {
+                q?: string;
+                include_inactive?: boolean;
+                page?: number;
+                page_size?: number;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -2188,7 +1821,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CatalogCreate"];
+                "application/json": components["schemas"]["CatalogPayload"];
             };
         };
         responses: {
@@ -2212,7 +1845,7 @@ export interface operations {
             };
         };
     };
-    delete_catalog_api_v1_backoffice_catalog__kind___item_id__delete: {
+    archive_catalog_api_v1_backoffice_catalog__kind___item_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -2258,7 +1891,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CatalogUpdate"];
+                "application/json": components["schemas"]["CatalogPayload"];
             };
         };
         responses: {
@@ -2284,6 +1917,39 @@ export interface operations {
     };
     patients_api_v1_backoffice_patients_get: {
         parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    availability_rules_api_v1_backoffice_availability_rules_get: {
+        parameters: {
             query?: never;
             header?: {
                 authorization?: string | null;
@@ -2313,7 +1979,7 @@ export interface operations {
             };
         };
     };
-    patient_documents_api_v1_backoffice_patient_documents_get: {
+    create_rule_api_v1_backoffice_availability_rules_post: {
         parameters: {
             query?: never;
             header?: {
@@ -2322,7 +1988,79 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityRulePayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_rule_api_v1_backoffice_availability_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_rule_api_v1_backoffice_availability_rules__rule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityRulePayload"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2375,7 +2113,7 @@ export interface operations {
             };
         };
     };
-    create_availability_block_api_v1_backoffice_availability_blocks_post: {
+    create_block_api_v1_backoffice_availability_blocks_post: {
         parameters: {
             query?: never;
             header?: {
@@ -2386,7 +2124,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AvailabilityBlockCreate"];
+                "application/json": components["schemas"]["AvailabilityBlockPayload"];
             };
         };
         responses: {
@@ -2410,7 +2148,7 @@ export interface operations {
             };
         };
     };
-    delete_availability_block_api_v1_backoffice_availability_blocks__block_id__delete: {
+    delete_block_api_v1_backoffice_availability_blocks__block_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -2441,7 +2179,7 @@ export interface operations {
             };
         };
     };
-    tickets_api_v1_backoffice_tickets_get: {
+    upload_ingestion_api_v1_backoffice_ingestions_upload_post: {
         parameters: {
             query?: never;
             header?: {
@@ -2450,47 +2188,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_ticket_api_v1_backoffice_tickets__ticket_id__patch: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                ticket_id: string;
-            };
-            cookie?: never;
-        };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TicketUpdate"];
+                "multipart/form-data": components["schemas"]["Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2540,7 +2245,7 @@ export interface operations {
             };
         };
     };
-    create_ingestion_api_v1_backoffice_ingestions_post: {
+    create_text_ingestion_api_v1_backoffice_ingestions_post: {
         parameters: {
             query?: never;
             header?: {
@@ -2551,47 +2256,12 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IngestionCreate"];
+                "application/json": components["schemas"]["TextIngestionPayload"];
             };
         };
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_ingestion_api_v1_backoffice_ingestions_upload_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2659,270 +2329,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    graph_api_v1_backoffice_graph_get: {
-        parameters: {
-            query?: {
-                entity_type?: string | null;
-            };
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    audit_api_v1_backoffice_audit_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clinic_api_v1_backoffice_clinic_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_clinic_api_v1_backoffice_clinic_patch: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClinicUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    staff_users_api_v1_backoffice_users_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_staff_user_api_v1_backoffice_users_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StaffUserCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_staff_user_api_v1_backoffice_users__user_id__delete: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_staff_user_api_v1_backoffice_users__user_id__patch: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StaffUserUpdate"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

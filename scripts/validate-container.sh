@@ -31,8 +31,8 @@ report = {
     "checks": [
         "infrastructure-health", "migrations-and-rls", "seed", "api-unit",
         "integration", "ruff", "web-unit", "typescript", "eslint",
-        "production-build", "system-scenarios", "playwright-desktop-mobile",
-        "ragas-rag-graphrag", "ocr-clean-degraded"
+        "production-build", "system-scenarios", "playwright-four-viewports",
+        "rag-graphrag-retrieval", "knowledge-ocr-ingestion"
     ],
     "metrics": evaluations["metrics"],
 }

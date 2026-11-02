@@ -1,16 +1,18 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -66,6 +68,7 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255))
     cpf_hmac: Mapped[str | None] = mapped_column(String(64), index=True)
     cpf_encrypted: Mapped[str | None] = mapped_column(Text)
+    birth_date: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -77,6 +80,7 @@ class Specialty(Base):
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Unit(Base):
@@ -85,6 +89,7 @@ class Unit(Base):
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
     address: Mapped[str] = mapped_column(String(255))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Insurer(Base):
@@ -92,6 +97,7 @@ class Insurer(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Doctor(Base):
@@ -118,17 +124,6 @@ class Exam(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-class Service(Base):
-    __tablename__ = "services"
-    __table_args__ = (UniqueConstraint("tenant_id", "name"),)
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
-    name: Mapped[str] = mapped_column(String(160))
-    duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
-    specialty_id: Mapped[str | None] = mapped_column(ForeignKey("specialties.id"))
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-
 class Availability(Base):
     __tablename__ = "availability"
     __table_args__ = (UniqueConstraint("tenant_id", "doctor_id", "starts_at"),)
@@ -138,6 +133,21 @@ class Availability(Base):
     unit_id: Mapped[str] = mapped_column(ForeignKey("units.id"))
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AvailabilityRule(Base):
+    __tablename__ = "availability_rules"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    doctor_id: Mapped[str] = mapped_column(ForeignKey("doctors.id"), index=True)
+    unit_id: Mapped[str] = mapped_column(ForeignKey("units.id"))
+    weekday: Mapped[int] = mapped_column(Integer)
+    starts_at: Mapped[time] = mapped_column(Time)
+    ends_at: Mapped[time] = mapped_column(Time)
+    slot_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class AvailabilityBlock(Base):
@@ -177,26 +187,6 @@ class AppointmentHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class PatientDocument(Base):
-    __tablename__ = "patient_documents"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
-    patient_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    kind: Mapped[str] = mapped_column(String(50))
-    filename: Mapped[str] = mapped_column(String(255))
-    storage_key: Mapped[str] = mapped_column(String(512))
-    raw_ocr: Mapped[str] = mapped_column(Text, default="")
-    fields: Mapped[dict] = mapped_column(JSON, default=dict)
-    confidence: Mapped[dict] = mapped_column(JSON, default=dict)
-    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
-    status: Mapped[DocumentStatus] = mapped_column(Enum(DocumentStatus), default=DocumentStatus.review_required)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
-    confirmed_by: Mapped[str | None] = mapped_column(String(36))
-    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
 class KnowledgeDocument(Base):
     __tablename__ = "knowledge_documents"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -227,17 +217,6 @@ class KnowledgeChunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class Ticket(Base):
-    __tablename__ = "tickets"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
-    patient_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
-    subject: Mapped[str] = mapped_column(String(200))
-    message: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(30), default="open")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
 class OutboxEvent(Base):
     __tablename__ = "outbox_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -262,17 +241,6 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class OtpCode(Base):
-    __tablename__ = "otp_codes"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
-    cpf_hmac: Mapped[str] = mapped_column(String(64), index=True)
-    code_hash: Mapped[str] = mapped_column(String(64))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    attempts: Mapped[int] = mapped_column(default=0)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -290,6 +258,9 @@ class ChatSession(Base):
     patient_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     state: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: utcnow() + timedelta(hours=2)
+    )
 
 
 class ChatMessage(Base):

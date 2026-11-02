@@ -3,12 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const routes = [
-  ["app/page.tsx", "Cuidado inteligente"],
-  ["app/chat/page.tsx", "Fontes consultadas"],
-  ["app/agendar/page.tsx", "Confirmar agendamento"],
-  ["app/documentos/revisao/page.tsx", "Confirmar e salvar"],
-  ["app/backoffice/agenda/page.tsx", "atualização em tempo real"],
+  ["app/page.tsx", "Conversar com a Alyvo"],
+  ["app/chat/page.tsx", "Conversa anônima"],
+  ["app/agendar/page.tsx", "permanentRedirect"],
+  ["app/backoffice/page.tsx", "revisões de conhecimento"],
+  ["app/backoffice/agenda/page.tsx", "Horários recorrentes"],
   ["app/backoffice/conhecimento/page.tsx", "Aprovar e publicar"],
+  ["app/backoffice/[section]/page.tsx", "Registro arquivado"],
 ];
 
 for (const [route, marker] of routes) {
@@ -18,10 +19,9 @@ for (const [route, marker] of routes) {
   });
 }
 
-test("design tokens preserve the Editorial Premium palette", async () => {
+test("design tokens preserve the Alyvo palette and reduced motion", async () => {
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  for (const token of ["#f7f7f2", "#101828", "#2457ff", "#b8f34a", "#d8dde6"]) {
+  for (const token of ["#f7f7f2", "#101828", "#2457ff", "#b8f34a", "#d8dde6", "prefers-reduced-motion"]) {
     assert.ok(css.includes(token), `missing design token ${token}`);
   }
 });
-

@@ -27,15 +27,10 @@ class Settings(BaseSettings):
     allow_external_providers: bool = False
     embedding_provider: str = "bge-m3"
     ocr_provider: str = "paddle"
-    smtp_host: str = "localhost"
-    smtp_port: int = 1025
-    smtp_from: str = "alyvo@local.test"
     public_web_url: str = "http://localhost:3000"
     upload_max_bytes: int = 10 * 1024 * 1024
-    retention_days: int = 90
     rate_limit_per_minute: int = 60
     validation_mode: bool = False
-    demo_otp: str = "123456"
     demo_tenant: str = "clinic-alyvo"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

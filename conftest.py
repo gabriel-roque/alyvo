@@ -23,14 +23,12 @@ def client():
 
 @pytest.fixture(scope="session")
 def patient_token(client):
-    started = client.post("/api/v1/auth/patient/start", json={"cpf": "123.456.789-09"})
-    assert started.status_code == 200
-    verified = client.post(
-        "/api/v1/auth/patient/verify",
-        json={"cpf": "123.456.789-09", "code": "123456"},
+    identified = client.post(
+        "/api/v1/auth/patient/identify",
+        json={"cpf": "123.456.789-09", "birth_date": "1990-01-15"},
     )
-    assert verified.status_code == 200
-    return verified.json()["access_token"]
+    assert identified.status_code == 200
+    return identified.json()["access_token"]
 
 
 @pytest.fixture(scope="session")

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
-import smtplib
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from email.message import EmailMessage
 from functools import lru_cache
 
 import httpx
@@ -22,9 +21,24 @@ class OcrResult:
     confidence: dict[str, float]
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    name: str
+    arguments: dict
+
+
+@dataclass(frozen=True)
+class ModelTurn:
+    content: str
+    tool_calls: list[ToolCall]
+
+
 class ChatModelProvider(ABC):
     @abstractmethod
     def complete(self, prompt: str, context: list[str]) -> str: ...
+
+    def respond(self, messages: list[dict], tools: list[dict]) -> ModelTurn:
+        return ModelTurn(self.complete(messages[-1]["content"], []), [])
 
 
 class EmbeddingProvider(ABC):
@@ -51,20 +65,25 @@ class ObjectStorageProvider(ABC):
     def delete_private(self, key: str) -> None: ...
 
 
-class NotificationProvider(ABC):
-    @abstractmethod
-    def send_otp(self, destination: str, code: str) -> None: ...
-
-
 class DeterministicChatProvider(ChatModelProvider):
     def complete(self, prompt: str, context: list[str]) -> str:
         started = time.perf_counter()
         if not context:
-            answer = "Não encontrei evidência suficiente na base aprovada. Posso abrir um ticket para a recepção."
+            answer = "Não encontrei evidência suficiente na base aprovada. Entre em contato com a clínica para confirmar."
         else:
             answer = f"Com base nas informações aprovadas da clínica: {context[0]}"
         record("llm.complete", provider="mock", model="deterministic", input_tokens=len(prompt.split()) + sum(len(item.split()) for item in context), output_tokens=len(answer.split()), duration_ms=round((time.perf_counter() - started) * 1000, 1))
         return answer
+
+    def respond(self, messages: list[dict], tools: list[dict]) -> ModelTurn:
+        message = messages[-1]["content"].casefold()
+        if any(term in message for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")):
+            return ModelTurn("", [ToolCall("list_my_appointments", {})])
+        if any(term in message for term in ("agendar", "horário", "horario", "disponibilidade")):
+            return ModelTurn("", [ToolCall("search_availability", {})])
+        if any(term in message for term in ("cancelar", "desmarcar")):
+            return ModelTurn("", [ToolCall("list_my_appointments", {"status": "confirmed"})])
+        return ModelTurn("", [ToolCall("search_knowledge", {"query": messages[-1]["content"]})])
 
 
 class OllamaChatProvider(ChatModelProvider):
@@ -102,6 +121,30 @@ class OllamaChatProvider(ChatModelProvider):
             record("llm.fallback", provider="ollama", model=self.settings.ollama_model, duration_ms=round((time.perf_counter() - started) * 1000, 1))
             return fallback.complete(prompt, context)
 
+    def respond(self, messages: list[dict], tools: list[dict]) -> ModelTurn:
+        try:
+            response = httpx.post(
+                f"{self.settings.ollama_base_url}/api/chat",
+                json={
+                    "model": self.settings.ollama_model,
+                    "stream": False,
+                    "think": False,
+                    "messages": messages,
+                    "tools": tools,
+                    "options": {"temperature": 0},
+                },
+                timeout=self.settings.ollama_timeout_seconds,
+            )
+            response.raise_for_status()
+            message = response.json()["message"]
+            calls = [
+                ToolCall(call["function"]["name"], call["function"].get("arguments", {}))
+                for call in message.get("tool_calls", [])
+            ]
+            return ModelTurn(message.get("content", ""), calls)
+        except (httpx.HTTPError, KeyError, ValueError, TypeError):
+            return DeterministicChatProvider().respond(messages, tools)
+
 
 class OpenRouterChatProvider(ChatModelProvider):
     def __init__(self, settings: Settings):
@@ -129,6 +172,24 @@ class OpenRouterChatProvider(ChatModelProvider):
         usage = payload.get("usage", {})
         record("llm.complete", provider="openrouter", model=self.settings.openrouter_model, input_tokens=usage.get("prompt_tokens"), output_tokens=usage.get("completion_tokens"), duration_ms=round((time.perf_counter() - started) * 1000, 1))
         return answer
+
+    def respond(self, messages: list[dict], tools: list[dict]) -> ModelTurn:
+        response = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.settings.openrouter_api_key}"},
+            json={"model": self.settings.openrouter_model, "messages": messages, "tools": tools, "temperature": 0},
+            timeout=60,
+        )
+        response.raise_for_status()
+        message = response.json()["choices"][0]["message"]
+        calls = [
+            ToolCall(
+                call["function"]["name"],
+                json.loads(call["function"].get("arguments", "{}")),
+            )
+            for call in message.get("tool_calls", [])
+        ]
+        return ModelTurn(message.get("content", ""), calls)
 
 
 class DeterministicEmbeddingProvider(EmbeddingProvider):
@@ -276,24 +337,6 @@ class MinioObjectStorage(ObjectStorageProvider):
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
 
-class ConsoleNotificationProvider(NotificationProvider):
-    def send_otp(self, destination: str, code: str) -> None:
-        # Destination is masked and the local demo code is intentionally fixed.
-        print(f"OTP demo enviado para ***{destination[-8:]}: {code}")  # noqa: T201
-
-
-class SmtpNotificationProvider(NotificationProvider):
-    def send_otp(self, destination: str, code: str) -> None:
-        settings = get_settings()
-        message = EmailMessage()
-        message["Subject"] = "Seu código temporário Alyvo"
-        message["From"] = settings.smtp_from
-        message["To"] = destination
-        message.set_content(f"Seu código temporário é {code}. Ele expira em 10 minutos e só pode ser usado uma vez.")
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as client:
-            client.send_message(message)
-
-
 @lru_cache
 def chat_provider() -> ChatModelProvider:
     settings = get_settings()
@@ -324,10 +367,4 @@ def object_storage_provider() -> ObjectStorageProvider:
     return MinioObjectStorage()
 
 
-@lru_cache
-def notification_provider() -> NotificationProvider:
-    settings = get_settings()
-    if settings.app_env == "test":
-        return ConsoleNotificationProvider()
-    return SmtpNotificationProvider()
 

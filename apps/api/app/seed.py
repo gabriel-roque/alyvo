@@ -1,10 +1,11 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import (
     Availability,
+    AvailabilityRule,
     Doctor,
     DocumentStatus,
     Exam,
@@ -12,7 +13,6 @@ from .models import (
     KnowledgeDocument,
     OutboxEvent,
     Role,
-    Service,
     Specialty,
     Tenant,
     Unit,
@@ -47,19 +47,13 @@ def seed_demo(db: Session) -> None:
     db.add_all(doctors)
     db.flush()
 
-    consultation = Service(
-        tenant_id=primary.id,
-        name="Consulta especializada",
-        duration_minutes=30,
-        specialty_id=cardiology.id,
-    )
     blood_exam = Exam(
         tenant_id=primary.id,
         name="Hemograma completo",
         preparation="Confirmar no pedido médico se há necessidade de jejum.",
         unit_ids=[center.id, south.id],
     )
-    db.add_all([consultation, blood_exam])
+    db.add(blood_exam)
     db.flush()
 
     today = datetime.now(timezone.utc).date()
@@ -71,11 +65,25 @@ def seed_demo(db: Session) -> None:
             for slot in (time(9, 0), time(10, 30), time(14, 0), time(16, 30)):
                 start = datetime.combine(current, slot, tzinfo=timezone.utc)
                 db.add(Availability(tenant_id=primary.id, doctor_id=doctor.id, unit_id=doctor.unit_id, starts_at=start, ends_at=start + timedelta(minutes=30)))
+    for doctor in doctors:
+        for weekday in range(5):
+            db.add(
+                AvailabilityRule(
+                    tenant_id=primary.id,
+                    doctor_id=doctor.id,
+                    unit_id=doctor.unit_id,
+                    weekday=weekday,
+                    starts_at=time(8, 0),
+                    ends_at=time(18, 0),
+                    slot_minutes=30,
+                    active=True,
+                )
+            )
 
     patient_cpf = "12345678909"
     db.add_all(
         [
-            User(tenant_id=primary.id, role=Role.patient, name="Juliana Silva", email="juliana.demo@alyvo.local", cpf_hmac=cpf_lookup(patient_cpf), cpf_encrypted=protect_cpf(patient_cpf)),
+            User(tenant_id=primary.id, role=Role.patient, name="Juliana Silva", email="juliana.demo@alyvo.local", cpf_hmac=cpf_lookup(patient_cpf), cpf_encrypted=protect_cpf(patient_cpf), birth_date=date(1990, 1, 15)),
             User(tenant_id=primary.id, role=Role.admin, name="Ana Duarte", email="admin@alyvo.local", password_hash=hash_password("alyvo-demo")),
             User(tenant_id=primary.id, role=Role.receptionist, name="Clara Lima", email="recepcao@alyvo.local", password_hash=hash_password("alyvo-demo")),
         ]
@@ -87,7 +95,6 @@ def seed_demo(db: Session) -> None:
     for insurer in (vida, amil):
         db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="insurers", aggregate_id=insurer.id, event_type="insurers.upserted", payload={"id": insurer.id, "name": insurer.name}))
     db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="exams", aggregate_id=blood_exam.id, event_type="exams.upserted", payload={"id": blood_exam.id, "name": blood_exam.name, "preparation": blood_exam.preparation, "unit_ids": blood_exam.unit_ids, "active": blood_exam.active}))
-    db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="services", aggregate_id=consultation.id, event_type="services.upserted", payload={"id": consultation.id, "name": consultation.name, "duration_minutes": consultation.duration_minutes, "specialty_id": consultation.specialty_id, "active": consultation.active}))
     db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="projection", aggregate_id=primary.id, event_type="projection.v4.rebuild", payload={"id": primary.id, "clinic_name": primary.name}))
     for doctor in doctors:
         db.add(OutboxEvent(tenant_id=primary.id, aggregate_type="doctor", aggregate_id=doctor.id, event_type="doctor.upserted", payload={"id": doctor.id, "name": doctor.name, "crm": doctor.crm, "specialty_id": doctor.specialty_id, "unit_id": doctor.unit_id, "insurer_ids": doctor.insurer_ids}))
@@ -143,13 +150,27 @@ def ensure_seeded(db: Session) -> None:
     if db.scalar(select(Tenant.id).limit(1)) is None:
         seed_demo(db)
         return
+    demo_patient = db.scalar(
+        select(User).where(
+            User.tenant_id == "clinic-alyvo",
+            User.email == "juliana.demo@alyvo.local",
+        )
+    )
+    if demo_patient and not demo_patient.birth_date:
+        demo_patient.birth_date = date(1990, 1, 15)
+        db.commit()
+    if not db.scalar(select(AvailabilityRule.id).where(AvailabilityRule.tenant_id == "clinic-alyvo").limit(1)):
+        for doctor in db.scalars(select(Doctor).where(Doctor.tenant_id == "clinic-alyvo", Doctor.active.is_(True))):
+            for weekday in range(5):
+                db.add(AvailabilityRule(tenant_id=doctor.tenant_id, doctor_id=doctor.id, unit_id=doctor.unit_id, weekday=weekday, starts_at=time(8), ends_at=time(18), slot_minutes=30))
+        db.commit()
     # One-time rebuild marker for the complete graph schema introduced in v4.
     # It also upgrades persistent demo volumes created by earlier versions.
     if db.scalar(select(OutboxEvent.id).where(OutboxEvent.event_type == "projection.v4.rebuild")):
         return
     for tenant in db.scalars(select(Tenant)).all():
         db.add(OutboxEvent(tenant_id=tenant.id, aggregate_type="projection", aggregate_id=tenant.id, event_type="projection.v4.rebuild", payload={"id": tenant.id, "clinic_name": tenant.name}))
-        for model, kind in ((Specialty, "specialties"), (Unit, "units"), (Insurer, "insurers"), (Exam, "exams"), (Service, "services")):
+        for model, kind in ((Specialty, "specialties"), (Unit, "units"), (Insurer, "insurers"), (Exam, "exams")):
             for item in db.scalars(select(model).where(model.tenant_id == tenant.id)).all():
                 if hasattr(item, "active") and not item.active:
                     continue

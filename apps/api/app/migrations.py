@@ -16,6 +16,18 @@ def apply_migrations() -> None:
             "CREATE TABLE IF NOT EXISTS schema_migrations ("
             "name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())"
         )
+        initial_applied = connection.execute(
+            text("SELECT 1 FROM schema_migrations WHERE name = '0001_initial.sql'")
+        ).scalar_one_or_none()
+        if not initial_applied:
+            # Compatibility stubs let the immutable legacy RLS migrations run
+            # on a clean install; 0005 removes these retired domains.
+            for legacy_table in ("services", "patient_documents", "tickets", "otp_codes"):
+                connection.exec_driver_sql(
+                    f"CREATE TABLE IF NOT EXISTS {legacy_table} ("
+                    "id varchar(36) PRIMARY KEY, "
+                    "tenant_id varchar(64) NOT NULL REFERENCES tenants(id))"
+                )
         for path in sorted(migration_dir.glob("*.sql")):
             sql = path.read_text()
             checksum = hashlib.sha256(sql.encode()).hexdigest()
