@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from langsmith import traceable
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from app.ai.conversation import (
 )
 from app.ai.providers import ToolCall, chat_provider
 from app.ai.retrieval import retrieve
+from app.ai.tracing import tool_span_inputs, tool_span_outputs
 from app.models import Appointment, AvailabilityRule, Doctor, Exam, Insurer, Specialty, Tenant, Unit
 from app.observability import record
 from app.routers.operations import available_slots
@@ -288,6 +290,12 @@ def _directory(db: Session, tenant_id: str, arguments: dict) -> dict:
     )
 
 
+@traceable(
+    name="alyvo.tool.execute",
+    run_type="tool",
+    process_inputs=tool_span_inputs,
+    process_outputs=tool_span_outputs,
+)
 def execute_tool(db: Session, tenant_id: str, identity: dict | None, name: str, arguments: dict) -> dict:
     started = time.perf_counter()
     if name not in ALLOWED_TOOLS:

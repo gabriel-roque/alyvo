@@ -1,9 +1,12 @@
 from dataclasses import dataclass
+from contextvars import ContextVar
 
+from langsmith import traceable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.neo4j_store import knowledge_store
+from app.ai.tracing import retrieval_span_inputs, retrieval_span_outputs
 from app.config import get_settings
 from app.models import Doctor, DocumentStatus, Insurer, KnowledgeDocument, Specialty, Unit
 from app.observability import operation, record
@@ -17,6 +20,58 @@ class RetrievalResult:
     strategy: str
 
 
+local_retrieval_only: ContextVar[bool] = ContextVar(
+    "local_retrieval_only", default=False
+)
+
+
+@traceable(
+    name="alyvo.rag.neo4j_hybrid",
+    run_type="retriever",
+    process_inputs=retrieval_span_inputs,
+    process_outputs=retrieval_span_outputs,
+)
+def _neo4j_hybrid(store, tenant_id: str, question: str) -> list:
+    return store.hybrid(tenant_id, question)
+
+
+@traceable(
+    name="alyvo.rag.neo4j_relational",
+    run_type="retriever",
+    process_inputs=retrieval_span_inputs,
+    process_outputs=retrieval_span_outputs,
+)
+def _neo4j_relational(store, tenant_id: str, question: str) -> list:
+    return store.relational(tenant_id, question)
+
+
+@traceable(
+    name="alyvo.rag.relational_sql",
+    run_type="retriever",
+    process_inputs=retrieval_span_inputs,
+    process_outputs=retrieval_span_outputs,
+)
+def _relational_rows(db: Session, tenant_id: str, question: str) -> list:
+    return db.execute(
+        select(Doctor, Specialty, Unit)
+        .join(Specialty, Doctor.specialty_id == Specialty.id)
+        .join(Unit, Doctor.unit_id == Unit.id)
+        .where(
+            Doctor.tenant_id == tenant_id,
+            Doctor.active.is_(True),
+            Doctor.deleted_at.is_(None),
+            Specialty.tenant_id == tenant_id,
+            Unit.tenant_id == tenant_id,
+        )
+    ).all()
+
+
+@traceable(
+    name="alyvo.rag.retrieve",
+    run_type="retriever",
+    process_inputs=retrieval_span_inputs,
+    process_outputs=retrieval_span_outputs,
+)
 def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
     """Tenant-scoped hybrid retrieval backed by Neo4j, with a test-only SQL fallback."""
     lowered = question.casefold()
@@ -38,13 +93,13 @@ def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
         "atende",
         "atendimento",
     }
-    if get_settings().app_env != "test":
+    if get_settings().app_env != "test" and not local_retrieval_only.get():
         try:
             store = knowledge_store()
             with operation("retrieval.neo4j", tenant_id=tenant_id):
-                hits = store.hybrid(tenant_id, question)
+                hits = _neo4j_hybrid(store, tenant_id, question)
                 if any(term in lowered for term in relation_terms) and not any(term in lowered for term in {"dura", "duração", "duracao", "tempo"}):
-                    relational = store.relational(tenant_id, question)
+                    relational = _neo4j_relational(store, tenant_id, question)
                     known = {hit.content for hit in hits}
                     hits.extend(hit for hit in relational if hit.content not in known)
                     hits = sorted(hits, key=lambda item: item.score, reverse=True)[:5]
@@ -93,18 +148,7 @@ def retrieve(db: Session, tenant_id: str, question: str) -> RetrievalResult:
             # fallback is still tenant-scoped and only exposes approved content.
             record("retrieval.fallback", reason="graph_unavailable")
     if any(term in lowered for term in relation_terms):
-        rows = db.execute(
-            select(Doctor, Specialty, Unit)
-            .join(Specialty, Doctor.specialty_id == Specialty.id)
-            .join(Unit, Doctor.unit_id == Unit.id)
-            .where(
-                Doctor.tenant_id == tenant_id,
-                Doctor.active.is_(True),
-                Doctor.deleted_at.is_(None),
-                Specialty.tenant_id == tenant_id,
-                Unit.tenant_id == tenant_id,
-            )
-        ).all()
+        rows = _relational_rows(db, tenant_id, question)
         insurers = {item.id: item.name for item in db.scalars(select(Insurer).where(Insurer.tenant_id == tenant_id))}
         contexts = []
         for doctor, specialty, unit in rows:

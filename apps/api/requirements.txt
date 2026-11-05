@@ -19,4 +19,4 @@ langgraph-checkpoint-postgres>=2,<4
 sentence-transformers>=3,<6
 pypdf>=5,<7
 Pillow>=11,<13
-cryptography>=43,<47
+cryptography>=43,<51

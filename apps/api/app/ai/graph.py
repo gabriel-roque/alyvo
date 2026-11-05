@@ -306,12 +306,12 @@ def validate_node(state: GraphState) -> dict:
     return {"result": result}
 
 
-def _build_graph(checkpointer):
+def _build_graph(checkpointer, *, prepare=prepare_node, execute=execute_node):
     builder = StateGraph(GraphState)
     builder.add_node("normalize", normalize_node)
     builder.add_node("classify_intent", classify_node)
-    builder.add_node("prepare_route", prepare_node)
-    builder.add_node("execute_tool", execute_node)
+    builder.add_node("prepare_route", prepare)
+    builder.add_node("execute_tool", execute)
     builder.add_node("validate_evidence", validate_node)
     builder.add_edge(START, "normalize")
     builder.add_edge("normalize", "classify_intent")

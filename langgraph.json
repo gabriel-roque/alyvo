@@ -1,0 +1,7 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "alyvo-local-demo": "./apps/api/app/ai/studio.py:studio_graph"
+  }
+}
