@@ -7,9 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-correlation_id_context: ContextVar[str] = ContextVar(
-    "correlation_id_context", default="background"
-)
+correlation_id_context: ContextVar[str] = ContextVar("correlation_id_context", default="background")
 logger = logging.getLogger("alyvo.telemetry")
 
 
@@ -52,4 +50,3 @@ def operation(event: str, **fields) -> Iterator[None]:
         duration_ms=round((time.perf_counter() - started) * 1000, 1),
         **fields,
     )
-

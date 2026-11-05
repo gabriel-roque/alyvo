@@ -44,10 +44,10 @@ Com a infraestrutura em execução:
 docker compose --profile validation run --rm validate
 ```
 
-A validação cobre testes Python e web, tipos, lint, build, migrações, RLS,
-concorrência de agenda, outbox/Neo4j, OCR na ingestão de conhecimento,
-RAG/GraphRAG e fluxos Playwright em 375, 768, 1024 e 1440 px. O resultado fica em
-`reports/validation.json`.
+A validação cobre Ruff, mypy, testes Python e web, contratos OpenAPI/TypeScript,
+build, migrações, RLS, concorrência de agenda, outbox/Neo4j, OCR, regressões
+semânticas, RAG/GraphRAG e fluxos Playwright em 375, 768, 1024 e 1440 px. O
+resultado fica em `reports/validation.json`.
 
 Para medir latência aquecida, concorrência e confirmar que o modelo está 100% na
 GPU:
@@ -73,6 +73,12 @@ Next.js ─► FastAPI ─► LangGraph ─► LangChain ─► OpenRouter
 O PostgreSQL é a fonte de verdade. O worker projeta no Neo4j somente dados e
 documentos institucionais aprovados. O frontend usa os contratos gerados em
 `packages/contracts`.
+
+O backend separa as fronteiras HTTP (`app/api`), domínio (`app/domain`),
+orquestração (`app/agent`), tools tipadas (`app/tools`), recuperação
+(`app/retrieval`), prompts versionados (`app/prompts`) e integrações
+(`app/infrastructure`). O dataset de regressão fica em `datasets/regression` e
+é executado junto dos testes em `apps/api/tests/regression`.
 
 O tracing externo fica desligado por padrão. Para ativá-lo, configure
 `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` e `LANGSMITH_PROJECT`. Entradas são

@@ -205,7 +205,7 @@ export default function ChatPage() {
                       {items.map((item) => (
                         <button key={item.id} onClick={() => void action("create_appointment", { doctor_id: typeof item.doctor === "object" ? item.doctor.id : "", starts_at: item.starts_at, reason: "Consulta" })}>
                           <span className="tool-icon"><CalendarDays /></span>
-                          <span><strong>{label(item.doctor)}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone, weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)}</small></span>
+                          <span><strong>{label(item.doctor)}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone ?? undefined, weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)}</small></span>
                           <span className="tool-action">Agendar</span>
                         </button>
                       ))}
@@ -239,7 +239,7 @@ export default function ChatPage() {
                       {items.map((item) => (
                         <div className="appointment-tool" key={item.id}>
                           <span className="tool-icon"><Clock3 /></span>
-                          <span><strong>{label(item.doctor) || item.reason}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone, weekday: "long", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)} · {item.status === "confirmed" ? "confirmada" : "cancelada"}</small></span>
+                          <span><strong>{label(item.doctor) || item.reason}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone ?? undefined, weekday: "long", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)} · {item.status === "confirmed" ? "confirmada" : "cancelada"}</small></span>
                           {item.status === "confirmed" && <button onClick={() => void action("cancel_appointment", { appointment_id: item.id })}>Cancelar</button>}
                         </div>
                       ))}

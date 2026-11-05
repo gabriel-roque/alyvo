@@ -8,6 +8,8 @@ python3 packages/contracts/generate.py
 npm run generate:contracts
 python3 -m pytest apps/api/tests tests/integration
 python3 -m ruff check apps/api apps/worker datasets evaluations tests conftest.py
+python3 -m ruff format --check apps/api apps/worker datasets evaluations tests conftest.py
+python3 -m mypy apps/api/app/agent apps/api/app/api apps/api/app/core apps/api/app/domain apps/api/app/infrastructure apps/api/app/prompts apps/api/app/retrieval apps/api/app/tools
 npm run test:web
 npm run typecheck
 npm run lint
@@ -35,7 +37,8 @@ report = {
     "status": "passed",
     "checks": [
         "infrastructure-health", "migrations-and-rls", "seed", "api-unit",
-        "integration", "ruff", "web-unit", "typescript", "eslint",
+        "integration", "ruff", "ruff-format", "mypy", "architecture-boundaries",
+        "web-unit", "typescript", "eslint",
         "production-build", "system-scenarios", "playwright-four-viewports",
         "rag-graphrag-retrieval", "knowledge-ocr-ingestion"
     ],

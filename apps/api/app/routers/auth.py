@@ -58,7 +58,9 @@ def patient_access(user: User) -> dict:
 
 
 def staff_tokens(user: User, db: Session) -> dict:
-    refresh = issue_token(user.id, user.tenant_id, user.role.value, minutes=60 * 24 * 7, kind="refresh")
+    refresh = issue_token(
+        user.id, user.tenant_id, user.role.value, minutes=60 * 24 * 7, kind="refresh"
+    )
     db.add(
         RefreshToken(
             tenant_id=user.tenant_id,

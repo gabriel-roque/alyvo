@@ -75,6 +75,9 @@ class DialogFilters(BaseModel):
 
 class DialogState(BaseModel):
     active_intent: str | None = None
+    active_domain: str | None = None
+    active_action: str | None = None
+    active_topic: str | None = None
     filters: DialogFilters = Field(default_factory=DialogFilters)
     last_options: list[dict] = Field(default_factory=list)
     recovery_attempts: int = 0
@@ -171,7 +174,9 @@ def resolve_date_window(
         saturday = today + timedelta(days=(5 - today.weekday()) % 7)
         return DateWindow(start=saturday, end=saturday + timedelta(days=1), source="fim de semana")
     if "esta semana" in text or "essa semana" in text:
-        return DateWindow(start=today, end=today + timedelta(days=6 - today.weekday()), source="esta semana")
+        return DateWindow(
+            start=today, end=today + timedelta(days=6 - today.weekday()), source="esta semana"
+        )
     return None
 
 
@@ -195,7 +200,9 @@ def local_datetime(value: datetime, timezone_name: str) -> datetime:
 
 
 def local_to_utc(day: date, value: time, timezone_name: str) -> datetime:
-    return datetime.combine(day, value, tzinfo=tenant_timezone(timezone_name)).astimezone(timezone.utc)
+    return datetime.combine(day, value, tzinfo=tenant_timezone(timezone_name)).astimezone(
+        timezone.utc
+    )
 
 
 def human_date(value: date) -> str:

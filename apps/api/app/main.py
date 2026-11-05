@@ -9,12 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from .api.routers import auth, backoffice, chat, operations
 from .config import get_settings
 from .db import AdminSessionLocal, create_schema, engine, tenant_context
 from .migrations import apply_migrations
 from .observability import correlation_id_context, record
 from .rate_limit import limiter
-from .routers import auth, backoffice, chat, operations
 from .security import decode_token
 from .seed import ensure_seeded
 
@@ -34,8 +34,9 @@ async def lifespan(_: FastAPI):
     # Readiness is only published after the local inference stack and pooled
     # graph connection are warm. This moves the one-time model cost out of the
     # patient's first conversation.
-    from app.ai.neo4j_store import knowledge_store
-    from app.ai.providers import chat_provider, embedding_provider
+    from app.infrastructure.neo4j import knowledge_store
+    from app.infrastructure.providers import chat_provider, embedding_provider
+
     settings = get_settings()
 
     def warm_local_stack() -> None:
@@ -43,7 +44,9 @@ async def lifespan(_: FastAPI):
         if settings.app_env != "test":
             knowledge_store().driver.verify_connectivity()
         if settings.llm_primary_provider == "ollama":
-            chat_provider().complete("Responda apenas OK.", ["Aquecimento interno sem dados pessoais."])
+            chat_provider().complete(
+                "Responda apenas OK.", ["Aquecimento interno sem dados pessoais."]
+            )
 
     try:
         await asyncio.to_thread(warm_local_stack)
@@ -94,9 +97,14 @@ async def correlation_id(request: Request, call_next):
         except Exception:
             pass
     try:
-        if request.url.path.endswith(("/patient/identify", "/patient/register", "/staff/login", "/refresh")):
+        if request.url.path.endswith(
+            ("/patient/identify", "/patient/register", "/staff/login", "/refresh")
+        ):
             operation_name = request.url.path.rsplit("/", 2)[-2:]
-            limiter.check(f"auth:{':'.join(operation_name)}:{request.client.host if request.client else 'unknown'}", 10)
+            limiter.check(
+                f"auth:{':'.join(operation_name)}:{request.client.host if request.client else 'unknown'}",
+                10,
+            )
         elif "/chat/" in request.url.path and request.method == "POST":
             category = "session" if request.url.path.endswith("/chat/sessions") else "message"
             limiter.check(f"chat:{category}:{request.client.host if request.client else 'unknown'}")
@@ -172,13 +180,16 @@ def deep_health():
     try:
         from neo4j import GraphDatabase
 
-        driver = GraphDatabase.driver(get_settings().neo4j_uri, auth=(get_settings().neo4j_user, get_settings().neo4j_password))
+        driver = GraphDatabase.driver(
+            get_settings().neo4j_uri,
+            auth=(get_settings().neo4j_user, get_settings().neo4j_password),
+        )
         driver.verify_connectivity()
         driver.close()
     except Exception:
         services["neo4j"] = "unavailable"
     try:
-        from app.ai.providers import object_storage_provider
+        from app.infrastructure.providers import object_storage_provider
 
         object_storage_provider()
     except Exception:
@@ -194,13 +205,20 @@ def deep_health():
             running.raise_for_status()
             models = running.json().get("models", [])
             selected = next(
-                (item for item in models if item.get("name", "").split(":")[0] == get_settings().ollama_model.split(":")[0]),
+                (
+                    item
+                    for item in models
+                    if item.get("name", "").split(":")[0]
+                    == get_settings().ollama_model.split(":")[0]
+                ),
                 None,
             )
             if selected:
                 size = selected.get("size") or 0
                 size_vram = selected.get("size_vram") or 0
-                services["ollama_acceleration"] = "gpu" if size and size_vram / size >= 0.95 else "partial_or_cpu"
+                services["ollama_acceleration"] = (
+                    "gpu" if size and size_vram / size >= 0.95 else "partial_or_cpu"
+                )
         except Exception:
             services["ollama"] = "unavailable"
     if get_settings().openrouter_api_key and get_settings().allow_external_providers:
@@ -238,4 +256,3 @@ def meta():
 
 for api_router in (auth.router, operations.router, chat.router, backoffice.router):
     app.include_router(api_router, prefix="/api/v1")
-

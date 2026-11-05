@@ -72,16 +72,52 @@ class DeterministicChatProvider(ChatModelProvider):
             answer = "Não encontrei evidência suficiente na base aprovada. Entre em contato com a clínica para confirmar."
         else:
             answer = f"Com base nas informações aprovadas da clínica: {context[0]}"
-        record("llm.complete", provider="mock", model="deterministic", input_tokens=len(prompt.split()) + sum(len(item.split()) for item in context), output_tokens=len(answer.split()), duration_ms=round((time.perf_counter() - started) * 1000, 1))
+        record(
+            "llm.complete",
+            provider="mock",
+            model="deterministic",
+            input_tokens=len(prompt.split()) + sum(len(item.split()) for item in context),
+            output_tokens=len(answer.split()),
+            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
         return answer
 
     def respond(self, messages: list[dict], tools: list[dict]) -> ModelTurn:
         user_messages = [item["content"] for item in messages if item.get("role") == "user"]
-        message = user_messages[-1].casefold()
+        raw_message = user_messages[-1]
+        message = raw_message.casefold()
         conversation = " ".join(user_messages).casefold()
-        if any(term in message for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")):
+        tool_names = {
+            item.get("function", {}).get("name") for item in tools if isinstance(item, dict)
+        }
+        if "classify_route" in tool_names:
+            from app.agent.routing import (
+                Action,
+                Domain,
+                RouteDecision,
+                Topic,
+                deterministic_classification,
+            )
+
+            route = deterministic_classification(raw_message) or RouteDecision(
+                domain=Domain.KNOWLEDGE,
+                action=Action.SEARCH,
+                topic=Topic.INSTITUTIONAL_POLICY,
+                confidence=0.7,
+            )
+            return ModelTurn(
+                "",
+                [ToolCall("classify_route", route.model_dump(mode="json"))],
+            )
+        if any(
+            term in message
+            for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")
+        ):
             return ModelTurn("", [ToolCall("list_my_appointments", {})])
-        if any(term in conversation for term in ("agendar", "marcar uma consulta", "horário", "horario", "disponibilidade")):
+        if any(
+            term in conversation
+            for term in ("agendar", "marcar uma consulta", "horário", "horario", "disponibilidade")
+        ):
             return ModelTurn("", [ToolCall("search_availability", {})])
         if any(term in message for term in ("cancelar", "desmarcar")):
             return ModelTurn("", [ToolCall("list_my_appointments", {"status": "confirmed"})])
@@ -143,8 +179,7 @@ class LangChainChatProvider(ChatModelProvider):
             return value
         if isinstance(value, list):
             return "".join(
-                item.get("text", "") if isinstance(item, dict) else str(item)
-                for item in value
+                item.get("text", "") if isinstance(item, dict) else str(item) for item in value
             )
         return str(value or "")
 
@@ -228,7 +263,14 @@ class DeterministicEmbeddingProvider(EmbeddingProvider):
             raw = [(value - 127.5) / 127.5 for value in digest]
             norm = math.sqrt(sum(value * value for value in raw)) or 1
             vectors.append([value / norm for value in raw])
-        record("embedding.complete", provider="mock", model="sha256", count=len(texts), dimensions=len(vectors[0]) if vectors else 0, duration_ms=round((time.perf_counter() - started) * 1000, 1))
+        record(
+            "embedding.complete",
+            provider="mock",
+            model="sha256",
+            count=len(texts),
+            dimensions=len(vectors[0]) if vectors else 0,
+            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
         return vectors
 
 
@@ -252,7 +294,14 @@ class BgeM3EmbeddingProvider(EmbeddingProvider):
                     self._cache.pop(next(iter(self._cache)))
                 self._cache[text] = vector
         vectors = [self._cache[text] for text in texts]
-        record("embedding.complete", provider="local", model="BAAI/bge-m3", count=len(texts), dimensions=len(vectors[0]) if vectors else 0, duration_ms=round((time.perf_counter() - started) * 1000, 1))
+        record(
+            "embedding.complete",
+            provider="local",
+            model="BAAI/bge-m3",
+            count=len(texts),
+            dimensions=len(vectors[0]) if vectors else 0,
+            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
         return vectors
 
 
@@ -260,11 +309,24 @@ class DeterministicOcrProvider(OcrProvider):
     def extract(self, content: bytes, filename: str) -> OcrResult:
         stem = filename.lower()
         if "pedido" in stem:
-            fields = {"paciente": "Juliana Silva", "exame": "Hemograma completo", "solicitante": "Dra. Ana Costa"}
+            fields = {
+                "paciente": "Juliana Silva",
+                "exame": "Hemograma completo",
+                "solicitante": "Dra. Ana Costa",
+            }
         elif "ident" in stem or "rg" in stem:
-            fields = {"nome": "Juliana Silva", "cpf": "***.456.789-**", "documento": "RG 12.345.678-9"}
+            fields = {
+                "nome": "Juliana Silva",
+                "cpf": "***.456.789-**",
+                "documento": "RG 12.345.678-9",
+            }
         else:
-            fields = {"nome": "Juliana Silva", "convenio": "Vida+", "numero": "VIDA-102938", "validade": "12/2027"}
+            fields = {
+                "nome": "Juliana Silva",
+                "convenio": "Vida+",
+                "numero": "VIDA-102938",
+                "validade": "12/2027",
+            }
         return OcrResult(
             raw_text=" | ".join(f"{key}: {value}" for key, value in fields.items()),
             fields=fields,
@@ -309,7 +371,9 @@ class PaddleOcrProvider(OcrProvider):
                 result = enhanced_result
         lines = [line[1][0] for page in result for line in page]
         confidence = [line[1][1] for page in result for line in page]
-        return OcrResult("\n".join(lines), {"texto": "\n".join(lines)}, {"texto": min(confidence or [0.0])})
+        return OcrResult(
+            "\n".join(lines), {"texto": "\n".join(lines)}, {"texto": min(confidence or [0.0])}
+        )
 
 
 class LocalObjectStorage(ObjectStorageProvider):
@@ -384,12 +448,20 @@ def chat_provider() -> ChatModelProvider:
 
 @lru_cache
 def embedding_provider() -> EmbeddingProvider:
-    return BgeM3EmbeddingProvider() if get_settings().embedding_provider == "bge-m3" else DeterministicEmbeddingProvider()
+    return (
+        BgeM3EmbeddingProvider()
+        if get_settings().embedding_provider == "bge-m3"
+        else DeterministicEmbeddingProvider()
+    )
 
 
 @lru_cache
 def ocr_provider() -> OcrProvider:
-    return PaddleOcrProvider() if get_settings().ocr_provider == "paddle" else DeterministicOcrProvider()
+    return (
+        PaddleOcrProvider()
+        if get_settings().ocr_provider == "paddle"
+        else DeterministicOcrProvider()
+    )
 
 
 @lru_cache
@@ -398,6 +470,3 @@ def object_storage_provider() -> ObjectStorageProvider:
     if settings.app_env == "test":
         return LocalObjectStorage()
     return MinioObjectStorage()
-
-
-

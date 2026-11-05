@@ -30,4 +30,3 @@ def test_approved_ingestion_creates_tenant_scoped_outbox_event(client, admin_tok
         )
         assert event is not None
         assert event.tenant_id == "clinic-alyvo"
-

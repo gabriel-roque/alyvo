@@ -1,21 +1,14 @@
+import type { components } from "@alyvo/contracts";
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 export const TENANT = process.env.NEXT_PUBLIC_DEMO_TENANT ?? "clinic-alyvo";
 
 let patientToken: string | null = null;
 
-export type Citation = { title: string; source: string; excerpt: string };
-export type ChatResponse = {
-  id: string;
-  answer: string;
-  intent: string;
-  confidence: number;
+export type Citation = components["schemas"]["Citation"];
+type GeneratedChatResponse = components["schemas"]["ChatResponse"];
+export type ChatResponse = Omit<GeneratedChatResponse, "citations"> & {
   citations: Citation[];
-  auth_required: boolean;
-  confirmation_request?: { id: string; tool: string; summary: string } | null;
-  tool_result?: { type: string; items?: Record<string, unknown>[]; appointment?: Record<string, unknown>; timezone?: string; total?: number; has_more?: boolean; query_summary?: string } | null;
-  tool_call?: { name: string } | null;
-  suggestions?: { label: string; message: string }[];
-  resolved_request?: Record<string, unknown> | null;
 };
 type BackofficePayload = Record<string, unknown> & { items: never[] };
 

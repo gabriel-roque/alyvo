@@ -676,7 +676,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
               }
             }
           },
@@ -742,7 +744,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
               }
             }
           },
@@ -864,7 +868,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
               }
             }
           },
@@ -930,7 +936,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
               }
             }
           },
@@ -1005,7 +1013,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
               }
             }
           },
@@ -2616,10 +2626,10 @@
             "title": "Arguments"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "tool",
-          "arguments"
+          "tool"
         ],
         "title": "ActionCreate"
       },
@@ -2814,6 +2824,122 @@
         ],
         "title": "CatalogPayload"
       },
+      "ChatResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "intent": {
+            "type": "string",
+            "title": "Intent"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "auth_required": {
+            "type": "boolean",
+            "title": "Auth Required",
+            "default": false
+          },
+          "confirmation_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmationRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tool_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tool_call": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolCallResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "type": "array",
+            "title": "Suggestions"
+          },
+          "resolved_request": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Request"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "answer",
+          "intent",
+          "confidence"
+        ],
+        "title": "ChatResponse"
+      },
+      "Citation": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "source",
+          "excerpt"
+        ],
+        "title": "Citation"
+      },
       "ConfirmationBody": {
         "properties": {
           "accepted": {
@@ -2821,11 +2947,36 @@
             "title": "Accepted"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "accepted"
         ],
         "title": "ConfirmationBody"
+      },
+      "ConfirmationRequest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "tool",
+          "summary"
+        ],
+        "title": "ConfirmationRequest"
       },
       "DoctorPayload": {
         "properties": {
@@ -2922,9 +3073,12 @@
         "properties": {
           "content": {
             "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
             "title": "Content"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "content"
@@ -3004,8 +3158,34 @@
             "default": "clinic-alyvo"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "SessionCreate"
+      },
+      "SessionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "expires_at"
+        ],
+        "title": "SessionResponse"
       },
       "StaffAppointmentPayload": {
         "properties": {
@@ -3059,6 +3239,25 @@
         ],
         "title": "StaffLogin"
       },
+      "Suggestion": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "message"
+        ],
+        "title": "Suggestion"
+      },
       "TextIngestionPayload": {
         "properties": {
           "title": {
@@ -3079,6 +3278,105 @@
           "content"
         ],
         "title": "TextIngestionPayload"
+      },
+      "ToolCallResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ToolCallResponse"
+      },
+      "ToolResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "appointment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appointment"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "has_more": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has More"
+          },
+          "query_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Summary"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "ToolResult"
       },
       "ValidationError": {
         "properties": {

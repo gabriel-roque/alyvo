@@ -44,7 +44,9 @@ def lock_appointment_slot(db: Session, tenant_id: str, doctor_id: str, starts_at
         )
 
 
-def appointment_view(item: Appointment, doctors: dict | None = None, units: dict | None = None) -> dict:
+def appointment_view(
+    item: Appointment, doctors: dict | None = None, units: dict | None = None
+) -> dict:
     return {
         "id": item.id,
         "doctor_id": item.doctor_id,
@@ -96,9 +98,16 @@ def available_slots(
         for item in db.scalars(doctors_query)
         if not insurer_id or insurer_id in item.insurer_ids
     }
-    units = {item.id: item for item in db.scalars(select(Unit).where(Unit.tenant_id == tenant_id, Unit.active.is_(True)))}
+    units = {
+        item.id: item
+        for item in db.scalars(
+            select(Unit).where(Unit.tenant_id == tenant_id, Unit.active.is_(True))
+        )
+    }
     starts = datetime.combine(from_date, time.min, tzinfo=zone).astimezone(timezone.utc)
-    ends = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
+    ends = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(
+        timezone.utc
+    )
     busy = db.scalars(
         select(Appointment).where(
             Appointment.tenant_id == tenant_id,
@@ -152,7 +161,9 @@ def available_slots(
         current += timedelta(days=1)
     items = []
     now = datetime.now(timezone.utc)
-    for (candidate_doctor, start), (candidate_unit, end) in sorted(candidates.items(), key=lambda item: item[0][1]):
+    for (candidate_doctor, start), (candidate_unit, end) in sorted(
+        candidates.items(), key=lambda item: item[0][1]
+    ):
         if candidate_unit not in units:
             continue
         if start <= now:
@@ -222,8 +233,24 @@ def create_patient_appointment(payload: AppointmentCreate, identity: dict, db: S
     db.add(item)
     try:
         db.flush()
-        db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action="appointment.created", resource_type="appointment", resource_id=item.id))
-        db.add(AppointmentHistory(tenant_id=identity["tenant"], appointment_id=item.id, actor_id=identity["sub"], from_status=None, to_status=AppointmentStatus.confirmed.value))
+        db.add(
+            AuditEvent(
+                tenant_id=identity["tenant"],
+                actor_id=identity["sub"],
+                action="appointment.created",
+                resource_type="appointment",
+                resource_id=item.id,
+            )
+        )
+        db.add(
+            AppointmentHistory(
+                tenant_id=identity["tenant"],
+                appointment_id=item.id,
+                actor_id=identity["sub"],
+                from_status=None,
+                to_status=AppointmentStatus.confirmed.value,
+            )
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -246,13 +273,31 @@ def cancel_patient_appointment(appointment_id: str, identity: dict, db: Session)
         return appointment_view(item)
     policy = db.get(Tenant, identity["tenant"])
     notice = policy.cancellation_notice_hours if policy else 0
-    starts_at = item.starts_at if item.starts_at.tzinfo else item.starts_at.replace(tzinfo=timezone.utc)
+    starts_at = (
+        item.starts_at if item.starts_at.tzinfo else item.starts_at.replace(tzinfo=timezone.utc)
+    )
     if notice and datetime.now(timezone.utc) > starts_at - timedelta(hours=notice):
         raise HTTPException(409, f"Cancelamentos exigem antecedência de {notice} horas")
     item.status = AppointmentStatus.cancelled
     item.cancelled_at = datetime.now(timezone.utc)
-    db.add(AuditEvent(tenant_id=identity["tenant"], actor_id=identity["sub"], action="appointment.cancelled", resource_type="appointment", resource_id=item.id))
-    db.add(AppointmentHistory(tenant_id=identity["tenant"], appointment_id=item.id, actor_id=identity["sub"], from_status=AppointmentStatus.confirmed.value, to_status=AppointmentStatus.cancelled.value))
+    db.add(
+        AuditEvent(
+            tenant_id=identity["tenant"],
+            actor_id=identity["sub"],
+            action="appointment.cancelled",
+            resource_type="appointment",
+            resource_id=item.id,
+        )
+    )
+    db.add(
+        AppointmentHistory(
+            tenant_id=identity["tenant"],
+            appointment_id=item.id,
+            actor_id=identity["sub"],
+            from_status=AppointmentStatus.confirmed.value,
+            to_status=AppointmentStatus.cancelled.value,
+        )
+    )
     db.commit()
     return appointment_view(item)
 
@@ -266,8 +311,25 @@ def public_doctor_directory(tenant_id: str = "clinic-alyvo", db: Session = Depen
         .where(Doctor.tenant_id == tenant_id, Doctor.active.is_(True), Doctor.deleted_at.is_(None))
         .order_by(Doctor.name)
     ).all()
-    insurers = {item.id: item.name for item in db.scalars(select(Insurer).where(Insurer.tenant_id == tenant_id, Insurer.active.is_(True)))}
-    return {"items": [{"id": doctor.id, "name": doctor.name, "crm": doctor.crm, "specialty": specialty.name, "unit": unit.name, "insurers": [insurers[item] for item in doctor.insurer_ids if item in insurers]} for doctor, specialty, unit in rows]}
+    insurers = {
+        item.id: item.name
+        for item in db.scalars(
+            select(Insurer).where(Insurer.tenant_id == tenant_id, Insurer.active.is_(True))
+        )
+    }
+    return {
+        "items": [
+            {
+                "id": doctor.id,
+                "name": doctor.name,
+                "crm": doctor.crm,
+                "specialty": specialty.name,
+                "unit": unit.name,
+                "insurers": [insurers[item] for item in doctor.insurer_ids if item in insurers],
+            }
+            for doctor, specialty, unit in rows
+        ]
+    }
 
 
 @router.get("/availability")
@@ -304,25 +366,42 @@ def list_availability(
 
 
 @router.post("/appointments", status_code=201)
-def create_appointment(payload: AppointmentCreate, identity: dict = Depends(current_identity), db: Session = Depends(get_db)):
+def create_appointment(
+    payload: AppointmentCreate,
+    identity: dict = Depends(current_identity),
+    db: Session = Depends(get_db),
+):
     return create_patient_appointment(payload, identity, db)
 
 
 @router.get("/appointments/me")
 def my_appointments(identity: dict = Depends(current_identity), db: Session = Depends(get_db)):
     rows = db.scalars(
-        select(Appointment).where(
+        select(Appointment)
+        .where(
             Appointment.tenant_id == identity["tenant"],
             Appointment.patient_id == identity["sub"],
-        ).order_by(Appointment.starts_at)
+        )
+        .order_by(Appointment.starts_at)
     ).all()
-    doctors = {item.id: item.name for item in db.scalars(select(Doctor).where(Doctor.tenant_id == identity["tenant"]))}
-    units = {item.id: item.name for item in db.scalars(select(Unit).where(Unit.tenant_id == identity["tenant"]))}
+    doctors = {
+        item.id: item.name
+        for item in db.scalars(select(Doctor).where(Doctor.tenant_id == identity["tenant"]))
+    }
+    units = {
+        item.id: item.name
+        for item in db.scalars(select(Unit).where(Unit.tenant_id == identity["tenant"]))
+    }
     return {"items": [appointment_view(item, doctors, units) for item in rows]}
 
 
 @router.post("/appointments/{appointment_id}/cancel")
-def cancel_appointment(appointment_id: str, confirmed: bool = True, identity: dict = Depends(current_identity), db: Session = Depends(get_db)):
+def cancel_appointment(
+    appointment_id: str,
+    confirmed: bool = True,
+    identity: dict = Depends(current_identity),
+    db: Session = Depends(get_db),
+):
     if not confirmed:
         raise HTTPException(422, "Confirmação explícita é obrigatória")
     return cancel_patient_appointment(appointment_id, identity, db)

@@ -38,9 +38,7 @@ STUDIO_DATABASE_PATH = (
 STUDIO_DATABASE_URL = f"sqlite:///{STUDIO_DATABASE_PATH}"
 
 _studio_engine = create_engine(STUDIO_DATABASE_URL, **options_for(STUDIO_DATABASE_URL))
-_StudioSession = sessionmaker(
-    bind=_studio_engine, autoflush=False, expire_on_commit=False
-)
+_StudioSession = sessionmaker(bind=_studio_engine, autoflush=False, expire_on_commit=False)
 _bootstrap_lock = Lock()
 _bootstrapped = False
 

@@ -6,4 +6,3 @@ if __name__ == "__main__":
     with SessionLocal() as session:
         seed_demo(session)
     print("Dados sintéticos carregados para clinic-alyvo e clinic-isolation.")
-

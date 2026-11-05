@@ -8,8 +8,11 @@ TEST_DB = Path("/tmp/alyvo-test.db")
 if TEST_DB.exists():
     TEST_DB.unlink()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
+os.environ.pop("DATABASE_ADMIN_URL", None)
 os.environ["APP_ENV"] = "test"
 os.environ["LLM_PRIMARY_PROVIDER"] = "mock"
+os.environ["LLM_FALLBACK_PROVIDER"] = "mock"
+os.environ["EMBEDDING_PROVIDER"] = "mock"
 os.environ["OCR_PROVIDER"] = "mock"
 
 from app.main import app  # noqa: E402
@@ -39,4 +42,3 @@ def admin_token(client):
     )
     assert response.status_code == 200
     return response.json()["access_token"]
-

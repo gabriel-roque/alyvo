@@ -68,9 +68,7 @@ def test_knowledge_projection_stores_only_primitive_entity_properties(monkeypatc
         "embedding_provider",
         lambda: SimpleNamespace(embed=lambda chunks: [[0.1, 0.2] for _ in chunks]),
     )
-    projector = neo4j_projection.Neo4jProjector.__new__(
-        neo4j_projection.Neo4jProjector
-    )
+    projector = neo4j_projection.Neo4jProjector.__new__(neo4j_projection.Neo4jProjector)
     projector.driver = Driver()
 
     projector._knowledge(
@@ -113,7 +111,9 @@ def test_graph_schema_uses_vector_index_and_complete_relationships():
     projector = neo4j_projection.Neo4jProjector.__new__(neo4j_projection.Neo4jProjector)
     projector.driver = Driver()
     projector.ensure_schema()
-    projector._catalog("exams", "clinic-alyvo", {"id": "exam-1", "name": "Exame", "unit_ids": ["unit-1"]})
+    projector._catalog(
+        "exams", "clinic-alyvo", {"id": "exam-1", "name": "Exame", "unit_ids": ["unit-1"]}
+    )
     joined = " ".join(queries)
     assert "CREATE VECTOR INDEX knowledge_chunk_embedding" in joined
     assert "vector.dimensions`: 1024" in joined

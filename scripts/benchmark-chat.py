@@ -23,7 +23,9 @@ def request(question: str) -> dict:
     with httpx.Client(timeout=60, headers={"X-Tenant-ID": "clinic-alyvo"}) as client:
         session = client.post(f"{API}/chat/sessions", json={}).json()["id"]
         started = time.perf_counter()
-        response = client.post(f"{API}/chat/sessions/{session}/messages", json={"content": question})
+        response = client.post(
+            f"{API}/chat/sessions/{session}/messages", json={"content": question}
+        )
         elapsed = (time.perf_counter() - started) * 1000
         response.raise_for_status()
         return {"duration_ms": round(elapsed, 1), "intent": response.json()["intent"]}
@@ -67,7 +69,9 @@ def main() -> None:
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "ollama_ps": ollama_processor(),
         "availability": [batch(level, "Tem horários na sexta-feira?") for level in (1, 2, 5)],
-        "knowledge": [batch(level, "Quais documentos devo levar para exames?") for level in (1, 2, 5)],
+        "knowledge": [
+            batch(level, "Quais documentos devo levar para exames?") for level in (1, 2, 5)
+        ],
     }
     target = ROOT / "reports" / "performance.json"
     target.parent.mkdir(exist_ok=True)

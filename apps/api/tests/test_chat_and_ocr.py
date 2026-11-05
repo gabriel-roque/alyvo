@@ -6,17 +6,25 @@ from app.ai.conversation import resolve_date_window
 
 def test_structured_directory_uses_operational_source(client):
     session = client.post("/api/v1/chat/sessions", json={}).json()["id"]
-    response = client.post(f"/api/v1/chat/sessions/{session}/messages", json={"content": "Quais cardiologistas aceitam o convênio Vida+ na Unidade Centro?"})
+    response = client.post(
+        f"/api/v1/chat/sessions/{session}/messages",
+        json={"content": "Quais cardiologistas aceitam o convênio Vida+ na Unidade Centro?"},
+    )
     body = response.json()
     assert response.status_code == 200
     assert body["intent"] == "search_directory"
     assert body["tool_result"]["type"] == "directory"
-    assert {item["doctor"] for item in body["tool_result"]["items"]} == {"Dra. Marina Lopes", "Dr. Lucas Ferreira"}
+    assert {item["doctor"] for item in body["tool_result"]["items"]} == {
+        "Dra. Marina Lopes",
+        "Dr. Lucas Ferreira",
+    }
 
 
 def test_personal_tool_requests_identification(client):
     session = client.post("/api/v1/chat/sessions", json={}).json()["id"]
-    response = client.post(f"/api/v1/chat/sessions/{session}/messages", json={"content": "Quais são minhas consultas?"})
+    response = client.post(
+        f"/api/v1/chat/sessions/{session}/messages", json={"content": "Quais são minhas consultas?"}
+    )
     assert response.status_code == 200
     assert response.json()["auth_required"] is True
     assert response.json()["tool_call"]["name"] == "list_my_appointments"
@@ -39,14 +47,19 @@ def test_authenticated_resume_consumes_checkpointed_tool(client, patient_token):
 
 def test_clinical_request_is_refused(client):
     session = client.post("/api/v1/chat/sessions", json={}).json()["id"]
-    response = client.post(f"/api/v1/chat/sessions/{session}/messages", json={"content": "Faça meu diagnóstico e prescreva um remédio"})
+    response = client.post(
+        f"/api/v1/chat/sessions/{session}/messages",
+        json={"content": "Faça meu diagnóstico e prescreva um remédio"},
+    )
     assert response.json()["intent"] == "clinical_safety"
     assert "Não faço diagnóstico" in response.json()["answer"]
 
 
 def test_greeting_is_conversational_and_does_not_trigger_rag(client):
     session = client.post("/api/v1/chat/sessions", json={}).json()["id"]
-    response = client.post(f"/api/v1/chat/sessions/{session}/messages", json={"content": "Bom dia!"})
+    response = client.post(
+        f"/api/v1/chat/sessions/{session}/messages", json={"content": "Bom dia!"}
+    )
     body = response.json()
     assert body["intent"] == "conversation"
     assert body["citations"] == []
@@ -172,7 +185,9 @@ def test_relative_friday_is_resolved_in_clinic_timezone():
     window = resolve_date_window("Tem horários na sexta-feira?", now=now)
     assert window is not None
     assert window.start.isoformat() == "2026-11-06"
-    next_window = resolve_date_window("Na próxima sexta", now=datetime(2026, 11, 6, 10, tzinfo=ZoneInfo("America/Sao_Paulo")))
+    next_window = resolve_date_window(
+        "Na próxima sexta", now=datetime(2026, 11, 6, 10, tzinfo=ZoneInfo("America/Sao_Paulo"))
+    )
     assert next_window is not None
     assert next_window.start.isoformat() == "2026-11-13"
 

@@ -48,7 +48,10 @@ def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         if engine.dialect.name == "postgresql":
-            db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_context.get()})
+            db.execute(
+                text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+                {"tenant_id": tenant_context.get()},
+            )
         yield db
     finally:
         db.close()
@@ -63,5 +66,6 @@ def create_schema() -> None:
 def set_database_tenant(db: Session, tenant_id: str) -> None:
     tenant_context.set(tenant_id)
     if engine.dialect.name == "postgresql":
-        db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
-
+        db.execute(
+            text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id}
+        )

@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     langsmith_endpoint: str = "https://api.smith.langchain.com"
     langsmith_sampling_rate: float = 1.0
     embedding_provider: str = "bge-m3"
+    embedding_model: str = "BAAI/bge-m3"
+    knowledge_index_version: str = "structural-bge-m3-v1"
+    chunk_parser_version: str = "structural-v1"
+    reranker_enabled: bool = False
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
     ocr_provider: str = "paddle"
     public_web_url: str = "http://localhost:3000"
     upload_max_bytes: int = 10 * 1024 * 1024
@@ -55,4 +60,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

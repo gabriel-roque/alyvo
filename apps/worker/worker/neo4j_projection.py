@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.ai.providers import embedding_provider
 from app.config import get_settings
+from app.infrastructure.providers import embedding_provider
 
 
 class Neo4jProjector:
@@ -14,7 +14,9 @@ class Neo4jProjector:
         if self.enabled:
             from neo4j import GraphDatabase
 
-            self.driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
+            self.driver = GraphDatabase.driver(
+                settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password)
+            )
             self.ensure_schema()
 
     def ensure_schema(self) -> None:
@@ -116,8 +118,12 @@ class Neo4jProjector:
             ).consume()
 
     def _knowledge(self, tenant_id: str, payload: dict) -> None:
-        chunks = payload.get("chunks", [])
-        vectors = embedding_provider().embed(chunks) if chunks else []
+        raw_chunks = payload.get("chunks", [])
+        chunks = [
+            chunk if isinstance(chunk, dict) else {"content": str(chunk)} for chunk in raw_chunks
+        ]
+        contents = [chunk.get("content", "") for chunk in chunks]
+        vectors = embedding_provider().embed(contents) if contents else []
         entities = payload.get("entities", [])
         entity_names = [
             entity.get("name", "") if isinstance(entity, dict) else str(entity)
@@ -150,27 +156,44 @@ class Neo4jProjector:
                 OPTIONAL MATCH (e)-[supported:SUPPORTED_BY]->(d)
                 DELETE mentioned, supported
                 """,
-                id=payload["id"], tenant_id=tenant_id,
+                id=payload["id"],
+                tenant_id=tenant_id,
             ).consume()
-            for position, (content, vector) in enumerate(zip(chunks, vectors, strict=True)):
+            for position, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):
                 session.run(
                     """
                     MATCH (d:Document {id: $document_id, tenant_id: $tenant_id})
                     CREATE (c:Chunk {id: $chunk_id, tenant_id: $tenant_id, position: $position,
-                                     content: $content, embedding: $embedding, status: 'published'})
+                                     content: $content, embedding: $embedding, status: 'published',
+                                     content_hash: $content_hash, section: $section, page: $page,
+                                     parent_id: $parent_id, parser_version: $parser_version,
+                                     embedding_model: $embedding_model, index_version: $index_version})
                     MERGE (d)-[:HAS_CHUNK]->(c)
                     """,
                     document_id=payload["id"],
                     chunk_id=f"{payload['id']}:{position}",
                     tenant_id=tenant_id,
                     position=position,
-                    content=content,
+                    content=chunk.get("content", ""),
                     embedding=vector,
+                    content_hash=chunk.get("content_hash", ""),
+                    section=chunk.get("section", ""),
+                    page=chunk.get("page"),
+                    parent_id=chunk.get("parent_id"),
+                    parser_version=chunk.get("parser_version", "structural-v1"),
+                    embedding_model=chunk.get("embedding_model", "BAAI/bge-m3"),
+                    index_version=chunk.get(
+                        "index_version", get_settings().knowledge_index_version
+                    ),
                 ).consume()
             for entity in entities:
                 entity_type = entity.get("type", "Entity") if isinstance(entity, dict) else "Entity"
                 entity_name = entity.get("name", "") if isinstance(entity, dict) else str(entity)
-                entity_id = entity.get("id", f"entity:{entity_type}:{entity_name}") if isinstance(entity, dict) else f"entity:{entity_type}:{entity_name}"
+                entity_id = (
+                    entity.get("id", f"entity:{entity_type}:{entity_name}")
+                    if isinstance(entity, dict)
+                    else f"entity:{entity_type}:{entity_name}"
+                )
                 if not entity_name:
                     continue
                 session.run(
@@ -189,7 +212,12 @@ class Neo4jProjector:
                 ).consume()
 
     def _catalog(self, kind: str, tenant_id: str, payload: dict) -> None:
-        labels = {"specialties": "Specialty", "units": "Unit", "insurers": "Insurer", "exams": "Exam"}
+        labels = {
+            "specialties": "Specialty",
+            "units": "Unit",
+            "insurers": "Insurer",
+            "exams": "Exam",
+        }
         label = labels.get(kind)
         if not label:
             return
@@ -204,7 +232,11 @@ class Neo4jProjector:
                 """,
                 id=payload["id"],
                 tenant_id=tenant_id,
-                properties={key: value for key, value in payload.items() if key != "id" and not key.startswith("_")},
+                properties={
+                    key: value
+                    for key, value in payload.items()
+                    if key != "id" and not key.startswith("_")
+                },
             ).consume()
             if kind == "exams":
                 session.run(
@@ -216,6 +248,7 @@ class Neo4jProjector:
                     MATCH (u:Unit {id: unit_id, tenant_id: $tenant_id})
                     MERGE (u)-[:PERFORMS]->(e)
                     """,
-                    id=payload["id"], tenant_id=tenant_id, unit_ids=payload.get("unit_ids", []),
+                    id=payload["id"],
+                    tenant_id=tenant_id,
+                    unit_ids=payload.get("unit_ids", []),
                 ).consume()
-

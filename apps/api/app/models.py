@@ -49,6 +49,13 @@ class DocumentStatus(str, enum.Enum):
     failed = "failed"
 
 
+class ToolExecutionStatus(str, enum.Enum):
+    pending = "pending"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+
+
 class Tenant(Base):
     __tablename__ = "tenants"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -169,7 +176,9 @@ class Appointment(Base):
     unit_id: Mapped[str] = mapped_column(ForeignKey("units.id"))
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    status: Mapped[AppointmentStatus] = mapped_column(Enum(AppointmentStatus), default=AppointmentStatus.confirmed)
+    status: Mapped[AppointmentStatus] = mapped_column(
+        Enum(AppointmentStatus), default=AppointmentStatus.confirmed
+    )
     reason: Mapped[str] = mapped_column(String(200), default="Consulta")
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -196,14 +205,18 @@ class KnowledgeDocument(Base):
     filename: Mapped[str] = mapped_column(String(255), default="")
     storage_key: Mapped[str] = mapped_column(String(512), default="")
     content_type: Mapped[str] = mapped_column(String(120), default="text/plain")
-    status: Mapped[DocumentStatus] = mapped_column(Enum(DocumentStatus), default=DocumentStatus.review_required)
+    status: Mapped[DocumentStatus] = mapped_column(
+        Enum(DocumentStatus), default=DocumentStatus.review_required
+    )
     source: Mapped[str] = mapped_column(String(255), default="Base institucional")
     version: Mapped[int] = mapped_column(default=1)
     entities: Mapped[list] = mapped_column(JSON, default=list)
     chunks: Mapped[list] = mapped_column(JSON, default=list)
     error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class KnowledgeChunk(Base):
@@ -214,6 +227,25 @@ class KnowledgeChunk(Base):
     position: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list] = mapped_column(JSON, default=list)
+    content_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    section: Mapped[str] = mapped_column(String(255), default="")
+    page: Mapped[int | None] = mapped_column(Integer)
+    parent_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    parser_version: Mapped[str] = mapped_column(String(40), default="structural-v1")
+    embedding_model: Mapped[str] = mapped_column(String(120), default="BAAI/bge-m3")
+    index_version: Mapped[str] = mapped_column(String(40), default="v1", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KnowledgeIndexVersion(Base):
+    __tablename__ = "knowledge_index_versions"
+    __table_args__ = (UniqueConstraint("tenant_id", "version"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    version: Mapped[str] = mapped_column(String(40))
+    parser_version: Mapped[str] = mapped_column(String(40))
+    embedding_model: Mapped[str] = mapped_column(String(120))
+    active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -273,3 +305,23 @@ class ChatMessage(Base):
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+
+class ToolExecution(Base):
+    __tablename__ = "tool_executions"
+    __table_args__ = (UniqueConstraint("tenant_id", "confirmation_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.id"), index=True)
+    actor_id: Mapped[str] = mapped_column(String(36), index=True)
+    confirmation_id: Mapped[str] = mapped_column(String(64), index=True)
+    tool_name: Mapped[str] = mapped_column(String(80))
+    arguments_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[ToolExecutionStatus] = mapped_column(
+        Enum(ToolExecutionStatus), default=ToolExecutionStatus.pending
+    )
+    result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    error_code: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )

@@ -31,7 +31,11 @@ def percentile(values: list[float], fraction: float) -> float:
 
 def model_gpu(client: httpx.Client, model: str) -> dict:
     loaded = next(
-        (item for item in client.get("/api/ps").json().get("models", []) if item.get("name") == model),
+        (
+            item
+            for item in client.get("/api/ps").json().get("models", [])
+            if item.get("name") == model
+        ),
         None,
     )
     if not loaded:

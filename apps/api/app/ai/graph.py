@@ -10,6 +10,14 @@ from langgraph.types import Command, interrupt
 from langsmith import tracing_context
 from pydantic import ValidationError
 
+from app.agent.routing import (
+    Action,
+    Domain,
+    RiskLevel,
+    RouteDecision,
+    Topic,
+    deterministic_classification,
+)
 from app.ai.checkpoints import checkpointer
 from app.ai.conversation import (
     DialogState,
@@ -17,11 +25,9 @@ from app.ai.conversation import (
     period_from_message,
     resolve_date_window,
 )
-from app.ai.intents import Domain, IntentClassification, RiskLevel, deterministic_classification
 from app.ai.privacy import redact_text, safe_trace_metadata
 from app.ai.providers import chat_provider
 from app.ai.workflow import (
-    SYSTEM_PROMPT,
     ToolCall,
     _base,
     _match_catalog,
@@ -31,6 +37,7 @@ from app.ai.workflow import (
 )
 from app.config import get_settings
 from app.observability import record
+from app.prompts import ROUTING_PROMPT, SYSTEM_PROMPT, prompt_hash
 
 
 class GraphState(TypedDict, total=False):
@@ -55,9 +62,9 @@ class ActionGraphState(TypedDict, total=False):
 CLASSIFICATION_TOOL = {
     "type": "function",
     "function": {
-        "name": "classify_intent",
+        "name": "classify_route",
         "description": "Classifica uma solicitação administrativa de clínica sem responder ao usuário.",
-        "parameters": IntentClassification.model_json_schema(),
+        "parameters": RouteDecision.model_json_schema(),
     },
 }
 
@@ -88,53 +95,95 @@ def classify_node(state: GraphState) -> dict:
             )
         )
     ):
-        classification = IntentClassification(
+        classification = RouteDecision(
             domain=Domain.SCHEDULING,
-            intent="search_availability",
-            action="search",
+            action=Action.SEARCH,
+            topic=Topic.AVAILABILITY,
             confidence=0.98,
         )
+    if classification is None and dialog.get("active_topic") in {
+        Topic.RETURN_POLICY.value,
+        Topic.EXAM_RELEASE_TIME.value,
+        Topic.EXAM_PREPARATION.value,
+    }:
+        short_follow_up = len(state["normalized"].split()) <= 8
+        follow_up_terms = {
+            "particular",
+            "convenio",
+            "prazo",
+            "dias",
+            "quando",
+            "e",
+            "para",
+            "hemograma",
+            "sangue",
+            "resultado",
+            "jejum",
+            "preparo",
+        }
+        if short_follow_up and set(state["normalized"].split()) & follow_up_terms:
+            classification = RouteDecision(
+                domain=Domain(dialog.get("active_domain") or Domain.KNOWLEDGE),
+                action=Action.SEARCH,
+                topic=Topic(dialog["active_topic"]),
+                confidence=0.96,
+            )
     if classification is None:
-        try:
-            turn = chat_provider().respond(
-                [
+        messages = [
+            {
+                "role": "system",
+                "content": f"{SYSTEM_PROMPT}\n{ROUTING_PROMPT}",
+            },
+            *state.get("history", [])[-6:],
+            {"role": "user", "content": state["message"]},
+        ]
+        for attempt in range(2):
+            try:
+                turn = chat_provider().respond(messages, [CLASSIFICATION_TOOL])
+                call = next(
+                    (item for item in turn.tool_calls if item.name == "classify_route"),
+                    None,
+                )
+                classification = RouteDecision.model_validate(call.arguments) if call else None
+                if classification is not None:
+                    break
+            except (ValidationError, ValueError, TypeError, json.JSONDecodeError):
+                classification = None
+            if attempt == 0:
+                messages.append(
                     {
                         "role": "system",
-                        "content": (
-                            f"{SYSTEM_PROMPT}\nClassifique a mensagem usando classify_intent. "
-                            "Reconheça pedidos não suportados e marque unsupported_reason."
-                        ),
-                    },
-                    *state.get("history", [])[-6:],
-                    {"role": "user", "content": state["message"]},
-                ],
-                [CLASSIFICATION_TOOL],
-            )
-            call = next((item for item in turn.tool_calls if item.name == "classify_intent"), None)
-            classification = IntentClassification.model_validate(call.arguments) if call else None
-        except (ValidationError, ValueError, TypeError, json.JSONDecodeError):
-            classification = None
+                        "content": "A saída anterior violou o schema. Corrija usando somente classify_route.",
+                    }
+                )
     if classification is None:
-        classification = IntentClassification(
+        classification = RouteDecision(
             domain=Domain.FALLBACK,
-            intent="ambiguous_request",
+            action=Action.CLARIFY,
+            topic=Topic.UNKNOWN,
             confidence=0.35,
             needs_clarification=True,
         )
     payload = classification.model_dump(mode="json")
-    record("intent.classified", **safe_trace_metadata(payload))
+    record(
+        "route.classified",
+        **safe_trace_metadata(payload, prompt_hash=prompt_hash(ROUTING_PROMPT)),
+    )
     return {"classification": payload}
 
 
 def prepare_node(state: GraphState) -> dict:
     db, tenant_id, _identity = _runtime()
-    classification = IntentClassification.model_validate(state["classification"])
+    classification = RouteDecision.model_validate(state["classification"])
     message = state["message"]
 
     try:
         dialog = DialogState.model_validate(state.get("dialog") or {})
     except ValidationError:
         dialog = DialogState()
+    dialog.active_domain = classification.domain.value
+    dialog.active_action = classification.action.value
+    dialog.active_topic = classification.topic.value
 
     immediate: dict | None = None
     call: ToolCall | None = None
@@ -158,7 +207,15 @@ def prepare_node(state: GraphState) -> dict:
         )
     elif classification.intent == "greeting":
         normalized = state["normalized"]
-        greeting = "Bom dia" if "bom dia" in normalized else "Boa tarde" if "boa tarde" in normalized else "Boa noite" if "boa noite" in normalized else "Olá"
+        greeting = (
+            "Bom dia"
+            if "bom dia" in normalized
+            else "Boa tarde"
+            if "boa tarde" in normalized
+            else "Boa noite"
+            if "boa noite" in normalized
+            else "Olá"
+        )
         immediate = _base(
             f"{greeting}! Como posso ajudar você hoje?",
             "conversation",
@@ -168,7 +225,10 @@ def prepare_node(state: GraphState) -> dict:
             ],
         )
     elif classification.intent == "thanks":
-        immediate = _base("Por nada! Se precisar, posso ajudar com agenda e informações da clínica.", "conversation")
+        immediate = _base(
+            "Por nada! Se precisar, posso ajudar com agenda e informações da clínica.",
+            "conversation",
+        )
     elif classification.intent == "farewell":
         immediate = _base("Até logo! Quando precisar, estarei por aqui.", "conversation")
     elif classification.intent == "capabilities":
@@ -205,17 +265,21 @@ def prepare_node(state: GraphState) -> dict:
         call = ToolCall("list_my_appointments", {"status": "confirmed"})
     elif classification.intent == "cancel_appointment":
         call = ToolCall("list_my_appointments", {"status": "confirmed"})
-    elif classification.intent == "opening_hours":
+    elif classification.topic == Topic.OPENING_HOURS:
         immediate = _schedule_information(db, tenant_id, message)
         if immediate is None:
             call = ToolCall("search_knowledge", {"query": message})
     elif classification.domain in {Domain.EXAMS, Domain.KNOWLEDGE, Domain.INSTITUTIONAL}:
         query = message
-        if classification.intent in {"exam_preparation", "institutional_knowledge"} and any(
+        if classification.topic in {Topic.EXAM_PREPARATION, Topic.INSTITUTIONAL_POLICY} and any(
             term in state["normalized"]
             for term in ("jejum", "preparo", "carteirinha", "recepcao", "documento")
         ):
             query = f"preparo exame pedido médico documento carteirinha recepção {message}"
+        elif classification.topic == Topic.RETURN_POLICY:
+            query = f"política prazo retorno consulta particular convênio {message}"
+        elif classification.topic == Topic.EXAM_RELEASE_TIME:
+            query = f"prazo processamento liberação resultado exame sangue hemograma {message}"
         call = ToolCall("search_knowledge", {"query": query})
     elif classification.needs_clarification:
         immediate = _base(
@@ -288,8 +352,13 @@ def execute_node(state: GraphState) -> dict:
 def validate_node(state: GraphState) -> dict:
     result = dict(state["result"])
     operational = result.get("tool_call", {}).get("name") in {
-        "list_insurers", "list_exams", "list_specialties", "list_units",
-        "search_directory", "search_availability", "list_my_appointments",
+        "list_insurers",
+        "list_exams",
+        "list_specialties",
+        "list_units",
+        "search_directory",
+        "search_availability",
+        "list_my_appointments",
     }
     if (
         operational
@@ -339,9 +408,7 @@ def confirm_action_node(state: ActionGraphState) -> dict:
         {
             "id": state["confirmation_id"],
             "tool": name,
-            "summary": confirmation.get(
-                "summary", "Confirme para concluir esta operação."
-            ),
+            "summary": confirmation.get("summary", "Confirme para concluir esta operação."),
         }
     )
     if not accepted:
@@ -377,9 +444,7 @@ def confirm_action_node(state: ActionGraphState) -> dict:
             tool_call={"name": name},
         )
     else:
-        appointment = cancel_patient_appointment(
-            arguments["appointment_id"], identity, db
-        )
+        appointment = cancel_patient_appointment(arguments["appointment_id"], identity, db)
         result = _base(
             "Consulta cancelada com sucesso.",
             name,
@@ -460,10 +525,7 @@ def resume_action_graph(
     config = _action_config(thread_id)
     app = action_graph_app()
     snapshot = app.get_state(config)
-    if (
-        not snapshot.next
-        or snapshot.values.get("confirmation_id") != confirmation_id
-    ):
+    if not snapshot.next or snapshot.values.get("confirmation_id") != confirmation_id:
         raise ValueError("Confirmação expirada")
     runtime_token = graph_runtime_context.set((db, tenant_id, identity))
     try:

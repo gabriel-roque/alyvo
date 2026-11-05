@@ -3,14 +3,14 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 
-from app.ai.providers import (
+from app.config import get_settings
+from app.db import SessionLocal, set_database_tenant
+from app.infrastructure.providers import (
     chat_provider,
     embedding_provider,
     object_storage_provider,
     ocr_provider,
 )
-from app.config import get_settings
-from app.db import SessionLocal, set_database_tenant
 from app.models import (
     Doctor,
     DocumentStatus,
@@ -24,13 +24,19 @@ from app.models import (
     Unit,
 )
 from app.observability import correlation_id_context, record
+from app.retrieval import structural_chunks
 from sqlalchemy import select
 
 from worker.celery_app import celery_app
 from worker.neo4j_projection import Neo4jProjector
 
 
-@celery_app.task(name="worker.tasks.project_outbox", autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
+@celery_app.task(
+    name="worker.tasks.project_outbox",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=5,
+)
 def project_outbox(limit: int = 100, request_id: str = "background") -> dict:
     correlation_id_context.set(request_id)
     processed = 0
@@ -55,7 +61,12 @@ def project_outbox(limit: int = 100, request_id: str = "background") -> dict:
                     correlation_id_context.set(event.payload.get("_correlation_id", request_id))
                     projector.project(event.event_type, event.tenant_id, event.payload)
                     event.processed_at = datetime.now(timezone.utc)
-                    record("outbox.projected", event_type=event.event_type, aggregate_id=event.aggregate_id, tenant_id=event.tenant_id)
+                    record(
+                        "outbox.projected",
+                        event_type=event.event_type,
+                        aggregate_id=event.aggregate_id,
+                        tenant_id=event.tenant_id,
+                    )
                     processed += 1
                 db.commit()
             if processed >= limit:
@@ -75,7 +86,9 @@ def _text_from_file(content: bytes, filename: str) -> str:
 
             from pypdf import PdfReader
 
-            text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(content)).pages)
+            text = "\f".join(
+                page.extract_text() or "" for page in PdfReader(BytesIO(content)).pages
+            )
             if text.strip():
                 return text
         except Exception:
@@ -83,11 +96,10 @@ def _text_from_file(content: bytes, filename: str) -> str:
     return ocr_provider().extract(content, filename).raw_text
 
 
-def _chunks(text: str, size: int = 700, overlap: int = 100) -> list[str]:
-    normalized = " ".join(text.split())
-    if not normalized:
-        return []
-    return [normalized[start : start + size] for start in range(0, len(normalized), size - overlap)]
+def _chunks(text: str) -> list[str]:
+    """Compatibility helper; new ingestion persists structural metadata."""
+
+    return [chunk.content for chunk in structural_chunks(text)]
 
 
 def _structured_fields(raw_text: str, kind: str, fallback: dict) -> dict:
@@ -140,10 +152,7 @@ def _structured_fields(raw_text: str, kind: str, fallback: dict) -> dict:
     try:
         start, end = answer.index("{"), answer.rindex("}") + 1
         parsed = json.loads(answer[start:end])
-        return {
-            key: str(parsed.get(key) or extracted.get(key, ""))
-            for key in fields
-        }
+        return {key: str(parsed.get(key) or extracted.get(key, "")) for key in fields}
     except (ValueError, json.JSONDecodeError):
         return extracted or fallback
 
@@ -165,8 +174,15 @@ def _known_entities(db, tenant_id: str, text: str) -> list[dict]:
     return entities
 
 
-@celery_app.task(name="worker.tasks.process_knowledge_document", autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
-def process_knowledge_document(document_id: str, tenant_id: str | None = None, request_id: str = "background") -> dict:
+@celery_app.task(
+    name="worker.tasks.process_knowledge_document",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+)
+def process_knowledge_document(
+    document_id: str, tenant_id: str | None = None, request_id: str = "background"
+) -> dict:
     correlation_id_context.set(request_id)
     with SessionLocal() as db:
         set_database_tenant(db, tenant_id or get_settings().demo_tenant)
@@ -178,13 +194,29 @@ def process_knowledge_document(document_id: str, tenant_id: str | None = None, r
             db.commit()
             content = object_storage_provider().get_private(item.storage_key)
             text = _text_from_file(content, item.filename)
-            chunks = _chunks(text)
-            vectors = embedding_provider().embed(chunks) if chunks else []
+            chunks = structural_chunks(text)
+            contents = [chunk.content for chunk in chunks]
+            vectors = embedding_provider().embed(contents) if contents else []
             db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == item.id).delete()
             for position, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):
-                db.add(KnowledgeChunk(tenant_id=item.tenant_id, document_id=item.id, position=position, content=chunk, embedding=vector))
+                db.add(
+                    KnowledgeChunk(
+                        tenant_id=item.tenant_id,
+                        document_id=item.id,
+                        position=position,
+                        content=chunk.content,
+                        embedding=vector,
+                        content_hash=chunk.content_hash,
+                        section=chunk.section,
+                        page=chunk.page,
+                        parent_id=chunk.parent_id,
+                        parser_version=get_settings().chunk_parser_version,
+                        embedding_model=get_settings().embedding_model,
+                        index_version=get_settings().knowledge_index_version,
+                    )
+                )
             item.content = text
-            item.chunks = chunks
+            item.chunks = contents
             item.entities = _known_entities(db, item.tenant_id, text)
             item.status = DocumentStatus.review_required
             db.commit()
@@ -194,6 +226,3 @@ def process_knowledge_document(document_id: str, tenant_id: str | None = None, r
             item.error = str(exc)[:1000]
             db.commit()
             raise exc
-
-
-

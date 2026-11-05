@@ -25,4 +25,3 @@ def test_patient_can_only_cancel_own_tenant_scoped_appointment(client, patient_t
     )
     assert response.status_code == 200
     assert response.json()["status"] == "cancelled"
-

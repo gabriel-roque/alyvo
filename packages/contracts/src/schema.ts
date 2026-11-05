@@ -650,7 +650,7 @@ export interface components {
             /** Tool */
             tool: string;
             /** Arguments */
-            arguments: {
+            arguments?: {
                 [key: string]: unknown;
             };
         };
@@ -758,10 +758,57 @@ export interface components {
              */
             active: boolean;
         };
+        /** ChatResponse */
+        ChatResponse: {
+            /** Id */
+            id: string;
+            /** Answer */
+            answer: string;
+            /** Intent */
+            intent: string;
+            /** Confidence */
+            confidence: number;
+            /** Citations */
+            citations?: components["schemas"]["Citation"][];
+            /**
+             * Auth Required
+             * @default false
+             */
+            auth_required: boolean;
+            confirmation_request?: components["schemas"]["ConfirmationRequest"] | null;
+            tool_result?: components["schemas"]["ToolResult"] | null;
+            tool_call?: components["schemas"]["ToolCallResponse"] | null;
+            /** Suggestions */
+            suggestions?: components["schemas"]["Suggestion"][];
+            /** Resolved Request */
+            resolved_request?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** Citation */
+        Citation: {
+            /** Title */
+            title: string;
+            /** Source */
+            source: string;
+            /** Excerpt */
+            excerpt: string;
+        };
         /** ConfirmationBody */
         ConfirmationBody: {
             /** Accepted */
             accepted: boolean;
+        };
+        /** ConfirmationRequest */
+        ConfirmationRequest: {
+            /** Id */
+            id: string;
+            /** Tool */
+            tool: string;
+            /** Summary */
+            summary: string;
+        } & {
+            [key: string]: unknown;
         };
         /** DoctorPayload */
         DoctorPayload: {
@@ -847,6 +894,18 @@ export interface components {
              */
             tenant_id: string;
         };
+        /** SessionResponse */
+        SessionResponse: {
+            /** Id */
+            id: string;
+            /** Tenant Id */
+            tenant_id: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
         /** StaffAppointmentPayload */
         StaffAppointmentPayload: {
             /** Patient Id */
@@ -876,12 +935,47 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** Suggestion */
+        Suggestion: {
+            /** Label */
+            label: string;
+            /** Message */
+            message: string;
+        };
         /** TextIngestionPayload */
         TextIngestionPayload: {
             /** Title */
             title: string;
             /** Content */
             content: string;
+        };
+        /** ToolCallResponse */
+        ToolCallResponse: {
+            /** Name */
+            name: string;
+        };
+        /** ToolResult */
+        ToolResult: {
+            /** Type */
+            type: string;
+            /** Items */
+            items?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Appointment */
+            appointment?: {
+                [key: string]: unknown;
+            } | null;
+            /** Timezone */
+            timezone?: string | null;
+            /** Total */
+            total?: number | null;
+            /** Has More */
+            has_more?: boolean | null;
+            /** Query Summary */
+            query_summary?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ValidationError */
         ValidationError: {
@@ -1320,7 +1414,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1357,7 +1451,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ChatResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1427,7 +1521,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ChatResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1464,7 +1558,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ChatResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1502,7 +1596,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ChatResponse"];
                 };
             };
             /** @description Validation Error */

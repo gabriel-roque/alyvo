@@ -31,17 +31,13 @@ def test_taxonomy_recognizes_unsupported_and_safety_intents():
 
 
 def test_taxonomy_tolerates_common_directory_typo():
-    classification = deterministic_classification(
-        "Quais profisionais aceitam UNIMED?"
-    )
+    classification = deterministic_classification("Quais profisionais aceitam UNIMED?")
     assert classification is not None
     assert classification.intent == "list_doctors"
 
 
 def test_trace_redaction_removes_identifiers():
-    redacted = redact_text(
-        "CPF 123.456.789-09, nascimento 15/01/1990, email paciente@example.com"
-    )
+    redacted = redact_text("CPF 123.456.789-09, nascimento 15/01/1990, email paciente@example.com")
     assert "123.456.789-09" not in redacted
     assert "15/01/1990" not in redacted
     assert "paciente@example.com" not in redacted
@@ -97,9 +93,7 @@ def test_child_span_processors_do_not_export_sensitive_values():
 def test_langgraph_config_discovers_local_demo_graph():
     root = Path(__file__).resolve().parents[3]
     config = json.loads((root / "langgraph.json").read_text())
-    assert config["graphs"] == {
-        "alyvo-local-demo": "./apps/api/app/ai/studio.py:studio_graph"
-    }
+    assert config["graphs"] == {"alyvo-local-demo": "./apps/api/app/ai/studio.py:studio_graph"}
     assert config["dependencies"] == ["."]
 
 

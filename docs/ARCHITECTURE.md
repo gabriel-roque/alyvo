@@ -5,8 +5,10 @@
 - **PostgreSQL:** única fonte operacional. A API nunca consulta o LLM para
   disponibilidade, agendamento ou cancelamento.
 - **Neo4j:** projeção de clínica, profissionais, catálogos, documentos e chunks
-  em índice vetorial de 1.024 dimensões. A recuperação híbrida parte de seeds
-  vetoriais, expande relações e reranqueia resultados; toda consulta filtra o tenant.
+  em índice vetorial de 1.024 dimensões. A recuperação híbrida combina top 30
+  lexical e top 30 vetorial com RRF `k=60`; toda consulta filtra tenant e versão
+  do índice. Expansão relacional e reranking só entram depois de superar seus
+  gates de qualidade e latência.
 - **Redis/Celery:** OCR, embeddings e projeção de outbox fora da requisição.
 - **MinIO:** arquivos privados de conhecimento prefixados por clínica.
 - **LangGraph:** grafo tipado dentro do FastAPI, com nós separados para
@@ -17,6 +19,23 @@
   provedor. O LLM nunca é fonte de verdade operacional.
 - **LangSmith:** tracing e avaliação opcionais. O conteúdo é desidentificado e
   fluxos autenticados/sensíveis expõem somente metadados seguros.
+
+## Fronteiras do código
+
+```text
+app/api             HTTP, schemas e tradução de erros
+app/core            configuração, segurança, erros e observabilidade
+app/domain          entidades e regras sem dependência de framework
+app/agent           estado, roteamento composto e orquestração
+app/tools           contratos Pydantic, registry e execução
+app/retrieval       parsing, chunking, busca, answerability e citações
+app/prompts         prompts versionados com nome, versão e hash
+app/infrastructure  PostgreSQL, Neo4j, Redis, MinIO, LLM e embeddings
+```
+
+Routers chamam serviços de aplicação, providers são montados no composition
+root e o worker reutiliza integrações sem importar routers. Testes de fronteira
+impedem o domínio de importar FastAPI, LangChain ou clientes externos.
 
 ## Fluxo de agendamento
 
@@ -45,8 +64,26 @@ para produzir erro `409` compreensível.
 3. A aprovação muda o documento para `published` e grava um evento na outbox na
    mesma transação.
 4. O worker aplica `MERGE` ou deleção idempotente e tenant-scoped no Neo4j.
-5. O índice vetorial recupera seeds; o grafo expande evidências relacionadas e
-   o reranking compõe as fontes. Baixa confiança orienta contato com a clínica.
+5. A pergunta contextualizada passa por busca lexical e vetorial, RRF,
+   reranking opcional, answerability e validação de citações.
+6. Somente até cinco evidências rastreáveis chegam ao gerador. Evidência
+   insuficiente ou conflitante produz abstinência explícita.
+
+Chunks preservam título, seção, página, parent, hash de conteúdo, parser,
+embedding e versão de índice. Mudanças de parsing, chunking ou embedding criam
+uma nova versão paralela; o corte é feito por `KNOWLEDGE_INDEX_VERSION` depois
+da validação.
+
+## Roteamento e tools
+
+Cada turno produz uma decisão estrita composta por domínio, ação, tópico,
+risco, entidades, confiança e necessidade de esclarecimento. Segurança e
+operações determinísticas têm precedência sobre a classificação do modelo. O
+campo público `intent` da v1 é derivado dessa decisão para manter o contrato.
+
+Tools têm argumentos e resultados Pydantic com campos extras proibidos. Cada
+turno executa no máximo três tools e uma escrita. Escritas exigem autenticação,
+autorização, confirmação e chave idempotente persistida em `tool_executions`.
 
 ## Segurança da demonstração
 

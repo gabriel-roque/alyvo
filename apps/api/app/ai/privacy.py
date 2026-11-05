@@ -21,7 +21,8 @@ def safe_trace_metadata(classification: dict | None, **extra) -> dict:
     classification = classification or {}
     allowed = {
         "domain": classification.get("domain"),
-        "intent": classification.get("intent"),
+        "action": classification.get("action"),
+        "topic": classification.get("topic"),
         "risk_level": classification.get("risk_level"),
         "confidence": classification.get("confidence"),
         **extra,

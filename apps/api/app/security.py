@@ -19,7 +19,9 @@ def normalize_cpf(value: str) -> str:
 
 
 def cpf_lookup(value: str) -> str:
-    return hmac.new(get_settings().app_secret.encode(), normalize_cpf(value).encode(), hashlib.sha256).hexdigest()
+    return hmac.new(
+        get_settings().app_secret.encode(), normalize_cpf(value).encode(), hashlib.sha256
+    ).hexdigest()
 
 
 def protect_cpf(value: str) -> str:
@@ -65,15 +67,23 @@ def issue_token(
         "exp": int((datetime.now(timezone.utc) + timedelta(minutes=minutes)).timestamp()),
         **(claims or {}),
     }
-    body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
-    signature = hmac.new(get_settings().app_secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+    body = (
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode())
+        .decode()
+        .rstrip("=")
+    )
+    signature = hmac.new(
+        get_settings().app_secret.encode(), body.encode(), hashlib.sha256
+    ).hexdigest()
     return f"{body}.{signature}"
 
 
 def decode_token(token: str) -> dict:
     try:
         body, signature = token.split(".", 1)
-        expected = hmac.new(get_settings().app_secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+        expected = hmac.new(
+            get_settings().app_secret.encode(), body.encode(), hashlib.sha256
+        ).hexdigest()
         if not hmac.compare_digest(signature, expected):
             raise ValueError
         padded = body + "=" * (-len(body) % 4)
@@ -121,4 +131,3 @@ def verify_password(password: str, encoded: str | None) -> bool:
     except ValueError:
         return False
     return hmac.compare_digest(hash_password(password, salt), encoded)
-

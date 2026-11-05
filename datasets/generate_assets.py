@@ -48,8 +48,17 @@ def main() -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
     documents = {
         "identidade": ["NOME: Juliana Silva", "CPF: 123.456.789-09", "RG: 12.345.678-9"],
-        "carteirinha": ["NOME: Juliana Silva", "CONVÊNIO: Vida+", "NÚMERO: VIDA-102938", "VALIDADE: 12/2027"],
-        "pedido-medico": ["PACIENTE: Juliana Silva", "EXAME: Hemograma completo", "SOLICITANTE: Dra. Ana Costa"],
+        "carteirinha": [
+            "NOME: Juliana Silva",
+            "CONVÊNIO: Vida+",
+            "NÚMERO: VIDA-102938",
+            "VALIDADE: 12/2027",
+        ],
+        "pedido-medico": [
+            "PACIENTE: Juliana Silva",
+            "EXAME: Hemograma completo",
+            "SOLICITANTE: Dra. Ana Costa",
+        ],
     }
     for name, lines in documents.items():
         image = document(name.replace("-", " ").upper(), lines)
