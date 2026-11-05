@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -19,13 +20,16 @@ def checkpointer():
     try:
         from langgraph.checkpoint.postgres import PostgresSaver
         from psycopg import Connection
+        from psycopg.rows import dict_row
 
-        _postgres_connection = Connection.connect(
+        connection: Connection[dict[str, Any]] = Connection.connect(
             settings.langgraph_database_url,
             autocommit=True,
             prepare_threshold=0,
+            row_factory=dict_row,
         )
-        saver = PostgresSaver(_postgres_connection)
+        _postgres_connection = connection
+        saver = PostgresSaver(connection)
         saver.setup()
         record("langgraph.checkpointer", backend="postgres", status="ok")
         return saver

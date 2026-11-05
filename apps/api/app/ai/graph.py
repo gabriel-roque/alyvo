@@ -321,11 +321,12 @@ def execute_node(state: GraphState) -> dict:
             details.append(f"com {arguments['doctor']}")
         elif arguments.get("specialty"):
             details.append(f"de {arguments['specialty']}")
+        period = arguments.get("period")
         period_label = {
             "morning": "pela manhã",
             "afternoon": "à tarde",
             "evening": "à noite",
-        }.get(arguments.get("period"))
+        }.get(period if isinstance(period, str) else "")
         if period_label:
             details.append(period_label)
         suffix = f" {' '.join(details)}" if details else ""

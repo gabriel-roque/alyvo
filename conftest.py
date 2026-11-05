@@ -8,12 +8,16 @@ TEST_DB = Path("/tmp/alyvo-test.db")
 if TEST_DB.exists():
     TEST_DB.unlink()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
-os.environ.pop("DATABASE_ADMIN_URL", None)
+# An explicit empty value wins over a developer's local .env; popping the
+# variable would let pydantic-settings load DATABASE_ADMIN_URL from that file.
+os.environ["DATABASE_ADMIN_URL"] = ""
 os.environ["APP_ENV"] = "test"
 os.environ["LLM_PRIMARY_PROVIDER"] = "mock"
 os.environ["LLM_FALLBACK_PROVIDER"] = "mock"
 os.environ["EMBEDDING_PROVIDER"] = "mock"
 os.environ["OCR_PROVIDER"] = "mock"
+os.environ["LANGSMITH_TRACING"] = "false"
+os.environ["LANGSMITH_API_KEY"] = ""
 
 from app.main import app  # noqa: E402
 

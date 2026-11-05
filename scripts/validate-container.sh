@@ -9,7 +9,7 @@ npm run generate:contracts
 python3 -m pytest apps/api/tests tests/integration
 python3 -m ruff check apps/api apps/worker datasets evaluations tests conftest.py
 python3 -m ruff format --check apps/api apps/worker datasets evaluations tests conftest.py
-python3 -m mypy apps/api/app/agent apps/api/app/api apps/api/app/core apps/api/app/domain apps/api/app/infrastructure apps/api/app/prompts apps/api/app/retrieval apps/api/app/tools
+env -u PYTHONPATH python3 -m mypy --no-incremental apps/api/app/agent apps/api/app/api apps/api/app/core apps/api/app/domain apps/api/app/infrastructure apps/api/app/prompts apps/api/app/retrieval apps/api/app/tools
 npm run test:web
 npm run typecheck
 npm run lint

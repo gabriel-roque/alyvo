@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .venv
+.mypy_cache
 node_modules
 **/node_modules
 **/.next

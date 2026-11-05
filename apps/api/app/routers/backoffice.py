@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
@@ -524,11 +525,13 @@ def list_catalog(
     if not include_inactive:
         query = query.where(model.active.is_(True))
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    rows = db.scalars(
-        query.order_by(model.name)
-        .offset((max(page, 1) - 1) * min(page_size, 100))
-        .limit(min(page_size, 100))
-    ).all()
+    rows: list[Any] = list(
+        db.scalars(
+            query.order_by(model.name)
+            .offset((max(page, 1) - 1) * min(page_size, 100))
+            .limit(min(page_size, 100))
+        ).all()
+    )
     return {
         "items": [serialize_catalog(item) for item in rows],
         "total": total,

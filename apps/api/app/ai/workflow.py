@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
+from typing import Any, Protocol
 
 from langsmith import traceable
 from pydantic import BaseModel
@@ -146,7 +148,7 @@ TOOLS = [
         },
     },
 ]
-ALLOWED_TOOLS = {item["function"]["name"] for item in TOOLS}
+ALLOWED_TOOLS: set[str] = set()
 
 # The typed registry is the source of truth. The assignment stays close to the
 # previous declaration so provider behavior remains backward compatible.
@@ -178,7 +180,7 @@ class AvailabilityArgs(DirectoryArgs):
     refinement: bool = False
 
 
-def _base(answer: str, tool: str, **values) -> dict:
+def _base(answer: str, tool: str, **values: Any) -> dict[str, Any]:
     return {
         "answer": answer,
         "intent": tool,
@@ -211,7 +213,7 @@ def _find_id(db: Session, model, tenant_id: str, name: str | None) -> str | None
     )
 
 
-def _directory(db: Session, tenant_id: str, arguments: dict) -> dict:
+def _directory(db: Session, tenant_id: str, arguments: dict[str, Any]) -> dict[str, Any]:
     parsed = DirectoryArgs.model_validate(arguments)
     if parsed.include_address:
         units_query = select(Unit).where(
@@ -258,7 +260,7 @@ def _directory(db: Session, tenant_id: str, arguments: dict) -> dict:
         )
     }
     insurer_id = _find_id(db, Insurer, tenant_id, parsed.insurer)
-    rows = []
+    rows: list[dict[str, Any]] = []
     for doctor, specialty, unit in db.execute(query.order_by(Doctor.name)):
         if parsed.insurer and (not insurer_id or insurer_id not in doctor.insurer_ids):
             continue
@@ -299,8 +301,12 @@ def _directory(db: Session, tenant_id: str, arguments: dict) -> dict:
     process_outputs=tool_span_outputs,
 )
 def execute_tool(
-    db: Session, tenant_id: str, identity: dict | None, name: str, arguments: dict
-) -> dict:
+    db: Session,
+    tenant_id: str,
+    identity: dict[str, Any] | None,
+    name: str,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
     started = time.perf_counter()
     if name not in ALLOWED_TOOLS:
         return _base(
@@ -309,99 +315,101 @@ def execute_tool(
     arguments = validate_tool_arguments(name, arguments)
     try:
         if name == "list_insurers":
-            items = db.scalars(
+            insurer_items = db.scalars(
                 select(Insurer)
                 .where(Insurer.tenant_id == tenant_id, Insurer.active.is_(True))
                 .order_by(Insurer.name)
             ).all()
-            names = ", ".join(item.name for item in items)
+            insurer_names = ", ".join(item.name for item in insurer_items)
             return _base(
-                f"Atendemos {names}." if items else "Não encontrei convênios ativos cadastrados.",
+                f"Atendemos {insurer_names}."
+                if insurer_items
+                else "Não encontrei convênios ativos cadastrados.",
                 name,
                 tool_result={
                     "type": "insurers",
-                    "items": [{"id": item.id, "name": item.name} for item in items],
+                    "items": [{"id": item.id, "name": item.name} for item in insurer_items],
                 },
-                confidence=1.0 if items else 0.0,
+                confidence=1.0 if insurer_items else 0.0,
             )
         if name == "list_exams":
-            query = select(Exam).where(Exam.tenant_id == tenant_id, Exam.active.is_(True))
+            exam_query = select(Exam).where(Exam.tenant_id == tenant_id, Exam.active.is_(True))
             unit_name = arguments.get("unit")
             unit_id = _find_id(db, Unit, tenant_id, unit_name)
-            exams = db.scalars(query.order_by(Exam.name)).all()
-            units = {
+            exam_items = db.scalars(exam_query.order_by(Exam.name)).all()
+            exam_units = {
                 item.id: item
                 for item in db.scalars(
                     select(Unit).where(Unit.tenant_id == tenant_id, Unit.active.is_(True))
                 )
             }
-            rows = []
-            for exam in exams:
+            exam_rows: list[dict[str, Any]] = []
+            for exam in exam_items:
                 exam_unit_ids = list(getattr(exam, "unit_ids", []) or [])
                 if unit_name and (not unit_id or unit_id not in exam_unit_ids):
                     continue
-                rows.append(
+                exam_rows.append(
                     {
                         "id": exam.id,
                         "name": exam.name,
                         "units": [
-                            {"id": item_id, "name": units[item_id].name}
+                            {"id": item_id, "name": exam_units[item_id].name}
                             for item_id in exam_unit_ids
-                            if item_id in units
+                            if item_id in exam_units
                         ],
                     }
                 )
-            names = ", ".join(item["name"] for item in rows)
+            exam_names = ", ".join(str(item["name"]) for item in exam_rows)
             return _base(
-                f"Realizamos {names}."
-                if rows
+                f"Realizamos {exam_names}."
+                if exam_rows
                 else "Não encontrei exames ativos com esses critérios.",
                 name,
-                tool_result={"type": "exams", "items": rows},
-                confidence=1.0 if rows else 0.0,
+                tool_result={"type": "exams", "items": exam_rows},
+                confidence=1.0 if exam_rows else 0.0,
             )
         if name == "list_specialties":
-            items = db.scalars(
+            specialty_items = db.scalars(
                 select(Specialty)
                 .where(Specialty.tenant_id == tenant_id, Specialty.active.is_(True))
                 .order_by(Specialty.name)
             ).all()
             return _base(
-                f"Temos atendimento em {', '.join(item.name for item in items)}."
-                if items
+                f"Temos atendimento em {', '.join(item.name for item in specialty_items)}."
+                if specialty_items
                 else "Não encontrei especialidades ativas.",
                 name,
                 tool_result={
                     "type": "specialties",
-                    "items": [{"id": item.id, "name": item.name} for item in items],
+                    "items": [{"id": item.id, "name": item.name} for item in specialty_items],
                 },
-                confidence=1.0 if items else 0.0,
+                confidence=1.0 if specialty_items else 0.0,
             )
         if name == "list_units":
-            items = db.scalars(
+            unit_items = db.scalars(
                 select(Unit)
                 .where(Unit.tenant_id == tenant_id, Unit.active.is_(True))
                 .order_by(Unit.name)
             ).all()
             return _base(
-                f"Nossas unidades são: {', '.join(item.name for item in items)}."
-                if items
+                f"Nossas unidades são: {', '.join(item.name for item in unit_items)}."
+                if unit_items
                 else "Não encontrei unidades ativas.",
                 name,
                 tool_result={
                     "type": "units",
                     "items": [
                         {"id": item.id, "name": item.name, "address": item.address}
-                        for item in items
+                        for item in unit_items
                     ],
                 },
-                confidence=1.0 if items else 0.0,
+                confidence=1.0 if unit_items else 0.0,
             )
         if name == "search_directory":
             return _directory(db, tenant_id, arguments)
         if name == "search_knowledge":
-            query = KnowledgeArgs.model_validate(arguments).query
-            result = retrieve(db, tenant_id, query)
+            knowledge_query = KnowledgeArgs.model_validate(arguments).query
+            result = retrieve(db, tenant_id, knowledge_query)
             if result.confidence < 0.6:
                 return _base(
                     "Não encontrei essa informação na base aprovada. Posso ajudar com outra dúvida ou você pode confirmar diretamente com a clínica.",
@@ -412,7 +420,7 @@ def execute_tool(
                     ],
                 )
             return _base(
-                chat_provider().complete(query, result.answer_context),
+                chat_provider().complete(knowledge_query, result.answer_context),
                 name,
                 confidence=result.confidence,
                 citations=result.citations,
@@ -425,72 +433,76 @@ def execute_tool(
                     auth_required=True,
                     pending_tool={"name": name, "arguments": arguments},
                 )
-            parsed = AppointmentListArgs.model_validate(arguments)
-            query = select(Appointment).where(
+            appointment_args = AppointmentListArgs.model_validate(arguments)
+            appointment_query = select(Appointment).where(
                 Appointment.tenant_id == tenant_id,
                 Appointment.patient_id == identity["sub"],
             )
-            if parsed.status:
-                query = query.where(Appointment.status == parsed.status)
-            if parsed.status != "cancelled":
-                query = query.where(Appointment.starts_at >= datetime.now(timezone.utc))
-            rows = db.scalars(query.order_by(Appointment.starts_at)).all()
-            doctors = {
+            if appointment_args.status:
+                appointment_query = appointment_query.where(
+                    Appointment.status == appointment_args.status
+                )
+            if appointment_args.status != "cancelled":
+                appointment_query = appointment_query.where(
+                    Appointment.starts_at >= datetime.now(timezone.utc)
+                )
+            appointment_rows = db.scalars(appointment_query.order_by(Appointment.starts_at)).all()
+            doctor_names = {
                 item.id: item.name
                 for item in db.scalars(select(Doctor).where(Doctor.tenant_id == tenant_id))
             }
-            units = {
+            unit_names = {
                 item.id: item.name
                 for item in db.scalars(select(Unit).where(Unit.tenant_id == tenant_id))
             }
             timezone_name = _timezone(db, tenant_id)
-            items = [
+            appointment_items: list[dict[str, Any]] = [
                 {
                     "id": item.id,
-                    "doctor": doctors.get(item.doctor_id),
-                    "unit": units.get(item.unit_id),
+                    "doctor": doctor_names.get(item.doctor_id),
+                    "unit": unit_names.get(item.unit_id),
                     "starts_at": local_datetime(item.starts_at, timezone_name).isoformat(),
                     "status": item.status.value,
                     "reason": item.reason,
                 }
-                for item in rows[:5]
+                for item in appointment_rows[:5]
             ]
             appointment_label = (
-                f"{'consulta cancelada' if len(rows) == 1 else 'consultas canceladas'}"
-                if parsed.status == "cancelled"
-                else f"{'consulta futura confirmada' if len(rows) == 1 else 'consultas futuras confirmadas'}"
+                f"{'consulta cancelada' if len(appointment_rows) == 1 else 'consultas canceladas'}"
+                if appointment_args.status == "cancelled"
+                else f"{'consulta futura confirmada' if len(appointment_rows) == 1 else 'consultas futuras confirmadas'}"
             )
             answer = (
-                f"Encontrei {len(rows)} {appointment_label}."
-                if items
+                f"Encontrei {len(appointment_rows)} {appointment_label}."
+                if appointment_items
                 else "Você não possui consultas com esse status."
             )
-            if len(rows) > len(items):
-                answer += f" Estou mostrando as próximas {len(items)}."
+            if len(appointment_rows) > len(appointment_items):
+                answer += f" Estou mostrando as próximas {len(appointment_items)}."
             return _base(
                 answer,
                 name,
                 tool_result={
                     "type": "appointments",
-                    "items": items,
+                    "items": appointment_items,
                     "timezone": timezone_name,
-                    "total": len(rows),
-                    "has_more": len(rows) > len(items),
+                    "total": len(appointment_rows),
+                    "has_more": len(appointment_rows) > len(appointment_items),
                 },
             )
         if name == "search_availability":
             normalized = dict(arguments)
             normalized["from_"] = normalized.pop("from", None)
-            parsed = AvailabilityArgs.model_validate(normalized)
-            doctor_id = _find_id(db, Doctor, tenant_id, parsed.doctor)
-            specialty_id = _find_id(db, Specialty, tenant_id, parsed.specialty)
-            unit_id = _find_id(db, Unit, tenant_id, parsed.unit)
-            insurer_id = _find_id(db, Insurer, tenant_id, parsed.insurer)
+            availability_args = AvailabilityArgs.model_validate(normalized)
+            doctor_id = _find_id(db, Doctor, tenant_id, availability_args.doctor)
+            specialty_id = _find_id(db, Specialty, tenant_id, availability_args.specialty)
+            unit_id = _find_id(db, Unit, tenant_id, availability_args.unit)
+            insurer_id = _find_id(db, Insurer, tenant_id, availability_args.insurer)
             for value, resolved, label in (
-                (parsed.doctor, doctor_id, "médico"),
-                (parsed.specialty, specialty_id, "especialidade"),
-                (parsed.unit, unit_id, "unidade"),
-                (parsed.insurer, insurer_id, "convênio"),
+                (availability_args.doctor, doctor_id, "médico"),
+                (availability_args.specialty, specialty_id, "especialidade"),
+                (availability_args.unit, unit_id, "unidade"),
+                (availability_args.insurer, insurer_id, "convênio"),
             ):
                 if value and not resolved:
                     return _base(
@@ -500,9 +512,12 @@ def execute_tool(
                         tool_result={"type": "availability", "items": [], "total": 0},
                     )
             timezone_name = _timezone(db, tenant_id)
-            start = parsed.from_ or tenant_today(timezone_name)
-            end = min(parsed.to or start + timedelta(days=14), start + timedelta(days=31))
-            all_items = available_slots(
+            start = availability_args.from_ or tenant_today(timezone_name)
+            end = min(
+                availability_args.to or start + timedelta(days=14),
+                start + timedelta(days=31),
+            )
+            all_slots = available_slots(
                 db,
                 tenant_id,
                 start,
@@ -511,59 +526,61 @@ def execute_tool(
                 specialty_id,
                 unit_id,
                 insurer_id,
-                parsed.period,
+                availability_args.period,
             )
-            offset = max(parsed.offset, 0)
-            items = all_items[offset : offset + 4]
-            serialized = [
+            offset = max(availability_args.offset, 0)
+            visible_slots = all_slots[offset : offset + 4]
+            serialized_slots = [
                 {
                     **item,
                     "starts_at": local_datetime(item["starts_at"], timezone_name).isoformat(),
                     "ends_at": local_datetime(item["ends_at"], timezone_name).isoformat(),
                 }
-                for item in items
+                for item in visible_slots
             ]
             date_summary = (
                 human_date(start)
                 if start == end
                 else f"entre {human_date(start)} e {human_date(end)}"
             )
-            criteria = [date_summary]
-            if parsed.specialty:
-                criteria.append(parsed.specialty)
-            if parsed.doctor:
-                criteria.append(parsed.doctor)
-            if parsed.unit:
-                criteria.append(parsed.unit)
-            if parsed.insurer:
-                criteria.append(f"convênio {parsed.insurer}")
+            criteria: list[str] = [date_summary]
+            if availability_args.specialty:
+                criteria.append(availability_args.specialty)
+            if availability_args.doctor:
+                criteria.append(availability_args.doctor)
+            if availability_args.unit:
+                criteria.append(availability_args.unit)
+            if availability_args.insurer:
+                criteria.append(f"convênio {availability_args.insurer}")
             period_label = {
                 "morning": "pela manhã",
                 "afternoon": "à tarde",
                 "evening": "à noite",
-            }.get(parsed.period)
+            }.get(availability_args.period or "")
             if period_label:
                 criteria.append(period_label)
             request_summary = ", ".join(criteria)
-            prefix = "Atualizei os horários" if parsed.refinement else "Encontrei horários"
+            prefix = (
+                "Atualizei os horários" if availability_args.refinement else "Encontrei horários"
+            )
             answer = (
                 f"{prefix} para {request_summary}. Veja as opções abaixo."
-                if items
+                if visible_slots
                 else f"Não encontrei horários para {request_summary}. Posso ajustar um dos critérios."
             )
-            filters = parsed.model_dump(
+            filters = availability_args.model_dump(
                 exclude_none=True,
                 exclude={"include_address", "offset", "refinement"},
             )
             filters.pop("from_", None)
             filters["from"] = start.isoformat()
             filters["to"] = end.isoformat()
-            suggestions = []
-            if offset + len(items) < len(all_items):
+            suggestions: list[dict[str, str]] = []
+            if offset + len(visible_slots) < len(all_slots):
                 suggestions.append(
                     {"label": "Ver mais horários", "message": "Mostre mais horários"}
                 )
-            if parsed.period != "afternoon":
+            if availability_args.period != "afternoon":
                 suggestions.append(
                     {"label": "Somente à tarde", "message": "Mostre somente os horários à tarde"}
                 )
@@ -588,9 +605,9 @@ def execute_tool(
                 name,
                 tool_result={
                     "type": "availability",
-                    "items": serialized,
-                    "total": len(all_items),
-                    "has_more": offset + len(items) < len(all_items),
+                    "items": serialized_slots,
+                    "total": len(all_slots),
+                    "has_more": offset + len(visible_slots) < len(all_slots),
                     "timezone": timezone_name,
                     "query_summary": request_summary,
                 },
@@ -686,30 +703,61 @@ def _schedule_information(db: Session, tenant_id: str, message: str) -> dict | N
     return _base(". ".join(parts) + ".", "schedule_information")
 
 
-def _match_catalog(db: Session, tenant_id: str, message: str, arguments: dict) -> dict:
+class CatalogEntry(Protocol):
+    name: str
+
+
+def _match_catalog(
+    db: Session, tenant_id: str, message: str, arguments: dict[str, Any]
+) -> dict[str, Any]:
     text = normalized_text(message)
     text_tokens = set(text.split())
     enriched = dict(arguments)
-    for model, key in (
-        (Doctor, "doctor"),
-        (Specialty, "specialty"),
-        (Unit, "unit"),
-        (Insurer, "insurer"),
-    ):
-        for item in db.scalars(select(model).where(model.tenant_id == tenant_id)).all():
+
+    def match(
+        items: Sequence[CatalogEntry],
+        key: str,
+        minimum_length: int,
+        match_by_token: bool,
+    ) -> None:
+        for item in items:
             candidate = normalized_text(item.name)
-            minimum_length = 3 if model is Unit else 4
             identifying_tokens = [
                 token
                 for token in candidate.split()
                 if len(token) >= minimum_length and token not in {"doutora", "doutor", "unidade"}
             ]
-            token_match = model in {Doctor, Unit} and any(
+            token_match = match_by_token and any(
                 token in text_tokens for token in identifying_tokens
             )
             if candidate in text or token_match:
                 enriched[key] = item.name
                 break
+
+    match(
+        db.scalars(select(Doctor).where(Doctor.tenant_id == tenant_id)).all(),
+        "doctor",
+        4,
+        True,
+    )
+    match(
+        db.scalars(select(Specialty).where(Specialty.tenant_id == tenant_id)).all(),
+        "specialty",
+        4,
+        False,
+    )
+    match(
+        db.scalars(select(Unit).where(Unit.tenant_id == tenant_id)).all(),
+        "unit",
+        3,
+        True,
+    )
+    match(
+        db.scalars(select(Insurer).where(Insurer.tenant_id == tenant_id)).all(),
+        "insurer",
+        4,
+        False,
+    )
     if "cardiolog" in text or "cardeolog" in text:
         enriched["specialty"] = "Cardiologia"
     elif "pediatr" in text:

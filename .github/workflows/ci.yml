@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - run: python -m ruff check apps/api apps/worker datasets evaluations tests conftest.py
       - run: python -m ruff format --check apps/api apps/worker datasets evaluations tests conftest.py
-      - run: python -m mypy apps/api/app/agent apps/api/app/api apps/api/app/core apps/api/app/domain apps/api/app/infrastructure apps/api/app/prompts apps/api/app/retrieval apps/api/app/tools
+      - run: python -m mypy --no-incremental apps/api/app/agent apps/api/app/api apps/api/app/core apps/api/app/domain apps/api/app/infrastructure apps/api/app/prompts apps/api/app/retrieval apps/api/app/tools
       - run: APP_ENV=test LLM_PRIMARY_PROVIDER=mock LLM_FALLBACK_PROVIDER=mock EMBEDDING_PROVIDER=mock python -m pytest apps/api/tests -q
       - run: python packages/contracts/generate.py
         env:
