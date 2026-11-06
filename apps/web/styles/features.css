@@ -1,0 +1,4 @@
+/* Feature-owned rules are imported after base/layout so features can specialize safely. */
+[data-feature="chat"], [data-feature="scheduling"], [data-feature="backoffice"] {
+  min-width: 0;
+}

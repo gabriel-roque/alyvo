@@ -4,15 +4,15 @@
  */
 
 export interface paths {
-    "/health": {
+    "/health/live": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Health */
-        get: operations["health_health_get"];
+        /** Liveness */
+        get: operations["liveness_health_live_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,15 +21,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/health/deep": {
+    "/health/ready": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Deep Health */
-        get: operations["deep_health_health_deep_get"];
+        /** Readiness */
+        get: operations["readiness_health_ready_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -55,7 +55,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/patient/identify": {
+    "/api/v1/auth/patients/identify": {
         parameters: {
             query?: never;
             header?: never;
@@ -64,15 +64,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Identify Patient */
-        post: operations["identify_patient_api_v1_auth_patient_identify_post"];
+        /** Identify */
+        post: operations["identify_api_v1_auth_patients_identify_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/patient/register": {
+    "/api/v1/auth/patients/register": {
         parameters: {
             query?: never;
             header?: never;
@@ -81,8 +81,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register Patient */
-        post: operations["register_patient_api_v1_auth_patient_register_post"];
+        /** Register */
+        post: operations["register_api_v1_auth_patients_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -98,15 +98,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login Staff */
-        post: operations["login_staff_api_v1_auth_staff_login_post"];
+        /** Login */
+        post: operations["login_api_v1_auth_staff_login_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/refresh": {
+    "/api/v1/auth/tokens/refresh": {
         parameters: {
             query?: never;
             header?: never;
@@ -116,7 +116,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Refresh */
-        post: operations["refresh_api_v1_auth_refresh_post"];
+        post: operations["refresh_api_v1_auth_tokens_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -147,8 +147,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Public Doctor Directory */
-        get: operations["public_doctor_directory_api_v1_directory_doctors_get"];
+        /** Doctors */
+        get: operations["doctors_api_v1_directory_doctors_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -157,15 +157,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/availability": {
+    "/api/v1/appointments/availability": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Availability */
-        get: operations["list_availability_api_v1_availability_get"];
+        /** Availability */
+        get: operations["availability_api_v1_appointments_availability_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -208,7 +208,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/appointments/{appointment_id}/cancel": {
+    "/api/v1/appointments/{appointment_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -217,9 +217,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /** Cancel Appointment */
-        post: operations["cancel_appointment_api_v1_appointments__appointment_id__cancel_post"];
-        delete?: never;
+        delete: operations["cancel_appointment_api_v1_appointments__appointment_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -302,8 +302,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request Action */
-        post: operations["request_action_api_v1_chat_sessions__session_id__actions_post"];
+        /** Action */
+        post: operations["action_api_v1_chat_sessions__session_id__actions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -319,93 +319,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm Action */
-        post: operations["confirm_action_api_v1_chat_sessions__session_id__confirmations__confirmation_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/dashboard": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Dashboard */
-        get: operations["dashboard_api_v1_backoffice_dashboard_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/agenda": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Agenda */
-        get: operations["agenda_api_v1_backoffice_agenda_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/appointments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Staff Appointment */
-        post: operations["create_staff_appointment_api_v1_backoffice_appointments_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/appointments/{appointment_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Staff Appointment */
-        patch: operations["update_staff_appointment_api_v1_backoffice_appointments__appointment_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/backoffice/appointments/{appointment_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel Staff Appointment */
-        post: operations["cancel_staff_appointment_api_v1_backoffice_appointments__appointment_id__cancel_post"];
+        /** Confirm */
+        post: operations["confirm_api_v1_chat_sessions__session_id__confirmations__confirmation_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -441,32 +356,32 @@ export interface paths {
         /** Update Doctor */
         put: operations["update_doctor_api_v1_backoffice_doctors__doctor_id__put"];
         post?: never;
-        /** Archive Doctor */
-        delete: operations["archive_doctor_api_v1_backoffice_doctors__doctor_id__delete"];
+        /** Delete Doctor */
+        delete: operations["delete_doctor_api_v1_backoffice_doctors__doctor_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/catalog/{kind}": {
+    "/api/v1/backoffice/specialties": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Catalog */
-        get: operations["list_catalog_api_v1_backoffice_catalog__kind__get"];
+        /** List Specialties */
+        get: operations["list_specialties_api_v1_backoffice_specialties_get"];
         put?: never;
-        /** Create Catalog */
-        post: operations["create_catalog_api_v1_backoffice_catalog__kind__post"];
+        /** Create Specialties */
+        post: operations["create_specialties_api_v1_backoffice_specialties_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/catalog/{kind}/{item_id}": {
+    "/api/v1/backoffice/specialties/{item_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -476,12 +391,137 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Archive Catalog */
-        delete: operations["archive_catalog_api_v1_backoffice_catalog__kind___item_id__delete"];
+        /** Delete Specialties */
+        delete: operations["delete_specialties_api_v1_backoffice_specialties__item_id__delete"];
         options?: never;
         head?: never;
-        /** Update Catalog */
-        patch: operations["update_catalog_api_v1_backoffice_catalog__kind___item_id__patch"];
+        /** Update Specialties */
+        patch: operations["update_specialties_api_v1_backoffice_specialties__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/backoffice/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Units */
+        get: operations["list_units_api_v1_backoffice_units_get"];
+        put?: never;
+        /** Create Units */
+        post: operations["create_units_api_v1_backoffice_units_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/units/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Units */
+        delete: operations["delete_units_api_v1_backoffice_units__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Units */
+        patch: operations["update_units_api_v1_backoffice_units__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/backoffice/insurers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Insurers */
+        get: operations["list_insurers_api_v1_backoffice_insurers_get"];
+        put?: never;
+        /** Create Insurers */
+        post: operations["create_insurers_api_v1_backoffice_insurers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/insurers/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Insurers */
+        delete: operations["delete_insurers_api_v1_backoffice_insurers__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Insurers */
+        patch: operations["update_insurers_api_v1_backoffice_insurers__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/backoffice/exams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Exams */
+        get: operations["list_exams_api_v1_backoffice_exams_get"];
+        put?: never;
+        /** Create Exams */
+        post: operations["create_exams_api_v1_backoffice_exams_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/exams/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Exams */
+        delete: operations["delete_exams_api_v1_backoffice_exams__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Exams */
+        patch: operations["update_exams_api_v1_backoffice_exams__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/backoffice/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dashboard */
+        get: operations["dashboard_api_v1_backoffice_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/backoffice/patients": {
@@ -501,15 +541,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/availability-rules": {
+    "/api/v1/backoffice/appointments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Availability Rules */
-        get: operations["availability_rules_api_v1_backoffice_availability_rules_get"];
+        /** Appointments */
+        get: operations["appointments_api_v1_backoffice_appointments_get"];
+        put?: never;
+        /** Create Appointment */
+        post: operations["create_appointment_api_v1_backoffice_appointments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/appointments/{appointment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel Appointment */
+        delete: operations["cancel_appointment_api_v1_backoffice_appointments__appointment_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Appointment */
+        patch: operations["update_appointment_api_v1_backoffice_appointments__appointment_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/backoffice/availability/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rules */
+        get: operations["rules_api_v1_backoffice_availability_rules_get"];
         put?: never;
         /** Create Rule */
         post: operations["create_rule_api_v1_backoffice_availability_rules_post"];
@@ -519,7 +595,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/availability-rules/{rule_id}": {
+    "/api/v1/backoffice/availability/rules/{rule_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -537,15 +613,15 @@ export interface paths {
         patch: operations["update_rule_api_v1_backoffice_availability_rules__rule_id__patch"];
         trace?: never;
     };
-    "/api/v1/backoffice/availability-blocks": {
+    "/api/v1/backoffice/availability/blocks": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Availability Blocks */
-        get: operations["availability_blocks_api_v1_backoffice_availability_blocks_get"];
+        /** Blocks */
+        get: operations["blocks_api_v1_backoffice_availability_blocks_get"];
         put?: never;
         /** Create Block */
         post: operations["create_block_api_v1_backoffice_availability_blocks_post"];
@@ -555,7 +631,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/availability-blocks/{block_id}": {
+    "/api/v1/backoffice/availability/blocks/{block_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -572,7 +648,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/ingestions/upload": {
+    "/api/v1/backoffice/knowledge/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documents */
+        get: operations["documents_api_v1_backoffice_knowledge_documents_get"];
+        put?: never;
+        /** Create Document */
+        post: operations["create_document_api_v1_backoffice_knowledge_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backoffice/knowledge/uploads": {
         parameters: {
             query?: never;
             header?: never;
@@ -581,33 +675,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload Ingestion */
-        post: operations["upload_ingestion_api_v1_backoffice_ingestions_upload_post"];
+        /** Upload */
+        post: operations["upload_api_v1_backoffice_knowledge_uploads_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/ingestions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ingestions */
-        get: operations["ingestions_api_v1_backoffice_ingestions_get"];
-        put?: never;
-        /** Create Text Ingestion */
-        post: operations["create_text_ingestion_api_v1_backoffice_ingestions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/backoffice/ingestions/{document_id}/approve": {
+    "/api/v1/backoffice/knowledge/documents/{document_id}/publish": {
         parameters: {
             query?: never;
             header?: never;
@@ -616,15 +692,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve Ingestion */
-        post: operations["approve_ingestion_api_v1_backoffice_ingestions__document_id__approve_post"];
+        /** Publish */
+        post: operations["publish_api_v1_backoffice_knowledge_documents__document_id__publish_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/backoffice/ingestions/{document_id}/reject": {
+    "/api/v1/backoffice/knowledge/documents/{document_id}/reject": {
         parameters: {
             query?: never;
             header?: never;
@@ -633,8 +709,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reject Ingestion */
-        post: operations["reject_ingestion_api_v1_backoffice_ingestions__document_id__reject_post"];
+        /** Reject */
+        post: operations["reject_api_v1_backoffice_knowledge_documents__document_id__reject_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -650,9 +726,7 @@ export interface components {
             /** Tool */
             tool: string;
             /** Arguments */
-            arguments?: {
-                [key: string]: unknown;
-            };
+            arguments: components["schemas"]["EmptyArguments"] | components["schemas"]["SearchDirectoryArguments"] | components["schemas"]["AvailabilityArguments"] | components["schemas"]["KnowledgeArguments"] | components["schemas"]["CreateAppointmentArguments"] | components["schemas"]["CancelAppointmentArguments"];
         };
         /** AppointmentCreate */
         AppointmentCreate: {
@@ -668,8 +742,117 @@ export interface components {
              * @default Consulta
              */
             reason: string;
-            /** Confirmed */
-            confirmed: boolean;
+        };
+        /** AppointmentItem */
+        AppointmentItem: {
+            /** Id */
+            id: string;
+            /** Patient Id */
+            patient_id: string;
+            /** Doctor Id */
+            doctor_id: string;
+            /** Doctor */
+            doctor: string | null;
+            /** Unit Id */
+            unit_id: string;
+            /** Unit */
+            unit: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Status */
+            status: string;
+            /** Reason */
+            reason: string;
+        };
+        /** AppointmentResult */
+        AppointmentResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "appointment_cancelled" | "appointment_created";
+            appointment: components["schemas"]["AppointmentItem"];
+        };
+        /** AppointmentUpdate */
+        AppointmentUpdate: {
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** AppointmentView */
+        AppointmentView: {
+            /** Id */
+            id: string;
+            /** Patient Id */
+            patient_id: string;
+            /** Patient */
+            patient?: string | null;
+            /** Doctor Id */
+            doctor_id: string;
+            /** Doctor */
+            doctor?: string | null;
+            /** Unit Id */
+            unit_id: string;
+            /** Unit */
+            unit?: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Status */
+            status: string;
+            /** Reason */
+            reason: string;
+        };
+        /** AppointmentsResult */
+        AppointmentsResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "appointments";
+            /** Items */
+            items: components["schemas"]["AppointmentItem"][];
+            /** Total */
+            total: number;
+        };
+        /** AvailabilityArguments */
+        AvailabilityArguments: {
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /** To Date */
+            to_date?: string | null;
+            /** Doctor Id */
+            doctor_id?: string | null;
+            /** Specialty Id */
+            specialty_id?: string | null;
+            /** Unit Id */
+            unit_id?: string | null;
+            /** Insurer Id */
+            insurer_id?: string | null;
+            /** Period */
+            period?: ("morning" | "afternoon" | "evening") | null;
         };
         /** AvailabilityBlockPayload */
         AvailabilityBlockPayload: {
@@ -690,6 +873,77 @@ export interface components {
              * @default Bloqueio administrativo
              */
             reason: string;
+        };
+        /** AvailabilityBlockView */
+        AvailabilityBlockView: {
+            /** Doctor Id */
+            doctor_id: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /**
+             * Reason
+             * @default Bloqueio administrativo
+             */
+            reason: string;
+            /** Id */
+            id: string;
+        };
+        /** AvailabilityItem */
+        AvailabilityItem: {
+            /** Id */
+            id: string;
+            doctor: components["schemas"]["NamedItem"];
+            unit: components["schemas"]["NamedItem"];
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** AvailabilityPage */
+        AvailabilityPage: {
+            /** Items */
+            items: components["schemas"]["AvailabilitySlotView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Timezone */
+            timezone: string;
+        };
+        /** AvailabilityResult */
+        AvailabilityResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "availability";
+            /** Items */
+            items: components["schemas"]["AvailabilityItem"][];
+            /** Total */
+            total: number;
+            /** Timezone */
+            timezone?: string | null;
         };
         /** AvailabilityRulePayload */
         AvailabilityRulePayload: {
@@ -724,12 +978,88 @@ export interface components {
              */
             active: boolean;
         };
-        /** Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post */
-        Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post: {
-            /** File */
-            file: string;
+        /** AvailabilityRuleView */
+        AvailabilityRuleView: {
+            /** Doctor Id */
+            doctor_id: string;
+            /** Unit Id */
+            unit_id: string;
+            /** Weekday */
+            weekday: number;
+            /**
+             * Starts At
+             * Format: time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: time
+             */
+            ends_at: string;
+            /**
+             * Slot Minutes
+             * @default 30
+             */
+            slot_minutes: number;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid Until */
+            valid_until?: string | null;
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /** Id */
+            id: string;
+        };
+        /** AvailabilitySlotView */
+        AvailabilitySlotView: {
+            /** Id */
+            id: string;
+            doctor: components["schemas"]["SlotDoctorView"];
+            unit: components["schemas"]["SlotUnitView"];
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** Body_upload_api_v1_backoffice_knowledge_uploads_post */
+        Body_upload_api_v1_backoffice_knowledge_uploads_post: {
             /** Title */
             title: string;
+            /** File */
+            file: string;
+        };
+        /** CancelAppointmentArguments */
+        CancelAppointmentArguments: {
+            /** Appointment Id */
+            appointment_id: string;
+        };
+        /** CatalogItem */
+        CatalogItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Active */
+            active: boolean;
+            /** Description */
+            description?: string | null;
+            /** Address */
+            address?: string | null;
+            /** Preparation */
+            preparation?: string | null;
+            /** Unit Ids */
+            unit_ids?: string[];
         };
         /** CatalogPayload */
         CatalogPayload: {
@@ -758,10 +1088,37 @@ export interface components {
              */
             active: boolean;
         };
-        /** ChatResponse */
-        ChatResponse: {
+        /** CatalogView */
+        CatalogView: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Address
+             * @default
+             */
+            address: string;
+            /**
+             * Preparation
+             * @default
+             */
+            preparation: string;
+            /** Unit Ids */
+            unit_ids?: string[];
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
             /** Id */
             id: string;
+        };
+        /** ChatResponse */
+        ChatResponse: {
             /** Answer */
             answer: string;
             /** Intent */
@@ -776,14 +1133,12 @@ export interface components {
              */
             auth_required: boolean;
             confirmation_request?: components["schemas"]["ConfirmationRequest"] | null;
-            tool_result?: components["schemas"]["ToolResult"] | null;
-            tool_call?: components["schemas"]["ToolCallResponse"] | null;
+            /** Tool Result */
+            tool_result?: (components["schemas"]["InsurersResult"] | components["schemas"]["ExamsResult"] | components["schemas"]["SpecialtiesResult"] | components["schemas"]["UnitsResult"] | components["schemas"]["DirectoryResult"] | components["schemas"]["AvailabilityResult"] | components["schemas"]["AppointmentsResult"] | components["schemas"]["KnowledgeResult"] | components["schemas"]["AppointmentResult"]) | null;
+            tool_call?: components["schemas"]["ToolCallView"] | null;
             /** Suggestions */
             suggestions?: components["schemas"]["Suggestion"][];
-            /** Resolved Request */
-            resolved_request?: {
-                [key: string]: unknown;
-            } | null;
+            pending_tool?: components["schemas"]["PendingTool"] | null;
         };
         /** Citation */
         Citation: {
@@ -796,7 +1151,10 @@ export interface components {
         };
         /** ConfirmationBody */
         ConfirmationBody: {
-            /** Accepted */
+            /**
+             * Accepted
+             * @default true
+             */
             accepted: boolean;
         };
         /** ConfirmationRequest */
@@ -807,8 +1165,67 @@ export interface components {
             tool: string;
             /** Summary */
             summary: string;
-        } & {
-            [key: string]: unknown;
+        };
+        /** CreateAppointmentArguments */
+        CreateAppointmentArguments: {
+            /** Doctor Id */
+            doctor_id: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Reason
+             * @default Consulta
+             */
+            reason: string;
+        };
+        /** DashboardView */
+        DashboardView: {
+            /** Appointments Today */
+            appointments_today: number;
+            /** Confirmed Today */
+            confirmed_today: number;
+            /** Patients */
+            patients: number;
+            /** Knowledge Pending */
+            knowledge_pending: number;
+        };
+        /** DirectoryItem */
+        DirectoryItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Crm */
+            crm: string;
+            /** Specialty Id */
+            specialty_id: string;
+            /** Specialty */
+            specialty: string;
+            /** Unit Id */
+            unit_id: string;
+            /** Unit */
+            unit: string;
+            /** Insurer Ids */
+            insurer_ids: string[];
+            /** Insurers */
+            insurers: string[];
+            /** Active */
+            active: boolean;
+        };
+        /** DirectoryResult */
+        DirectoryResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "directory";
+            /** Items */
+            items: components["schemas"]["DirectoryItem"][];
+            /** Total */
+            total: number;
         };
         /** DoctorPayload */
         DoctorPayload: {
@@ -828,37 +1245,262 @@ export interface components {
              */
             active: boolean;
         };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
+        /** DoctorView */
+        DoctorView: {
+            /** Name */
+            name: string;
+            /** Crm */
+            crm: string;
+            /** Specialty Id */
+            specialty_id: string;
+            /** Unit Id */
+            unit_id: string;
+            /** Insurer Ids */
+            insurer_ids?: string[];
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /** Id */
+            id: string;
+            /** Specialty */
+            specialty: string;
+            /** Unit */
+            unit: string;
+            /** Insurers */
+            insurers: string[];
         };
-        /** IngestionReview */
-        IngestionReview: {
+        /** DocumentView */
+        DocumentView: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Source */
+            source: string;
             /** Entities */
-            entities?: {
-                [key: string]: unknown;
-            }[];
-            /** Confirmed */
-            confirmed: boolean;
+            entities: components["schemas"]["KnowledgeEntity"][];
+            /** Preview */
+            preview: string;
+            /** Filename */
+            filename: string;
+            /** Sync Status */
+            sync_status: string;
         };
-        /** LogoutRequest */
-        LogoutRequest: {
-            /** Refresh Token */
-            refresh_token?: string | null;
+        /** EmptyArguments */
+        EmptyArguments: Record<string, never>;
+        /** ErrorResponse */
+        ErrorResponse: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Field Errors */
+            field_errors?: {
+                [key: string]: string;
+            }[];
+            /** Correlation Id */
+            correlation_id: string;
+        };
+        /** ExamsResult */
+        ExamsResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "exams";
+            /** Items */
+            items: components["schemas"]["CatalogItem"][];
+            /** Total */
+            total: number;
+        };
+        /** InsurersResult */
+        InsurersResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "insurers";
+            /** Items */
+            items: components["schemas"]["CatalogItem"][];
+            /** Total */
+            total: number;
+        };
+        /** KnowledgeArguments */
+        KnowledgeArguments: {
+            /** Query */
+            query: string;
+        };
+        /** KnowledgeEntity */
+        KnowledgeEntity: {
+            /** Type */
+            type: string;
+            /** Name */
+            name: string;
+            /** Id */
+            id?: string | null;
+        };
+        /** KnowledgeResult */
+        KnowledgeResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "knowledge";
+            /** Citations */
+            citations: {
+                [key: string]: string;
+            }[];
+            /** Confidence */
+            confidence: number;
+        };
+        /** LivenessResponse */
+        LivenessResponse: {
+            /** Status */
+            status: string;
         };
         /** MessageCreate */
         MessageCreate: {
             /** Content */
             content: string;
         };
+        /** MetaResponse */
+        MetaResponse: {
+            /** Name */
+            name: string;
+            /** Mode */
+            mode: string;
+            /** Clinic */
+            clinic: string;
+            /** Timezone */
+            timezone: string;
+            /** Data Policy */
+            data_policy: string;
+        };
+        /** NamedItem */
+        NamedItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Crm */
+            crm?: string | null;
+            /** Address */
+            address?: string | null;
+        };
+        /** Page[AppointmentView] */
+        Page_AppointmentView_: {
+            /** Items */
+            items: components["schemas"]["AppointmentView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[AvailabilityBlockView] */
+        Page_AvailabilityBlockView_: {
+            /** Items */
+            items: components["schemas"]["AvailabilityBlockView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[AvailabilityRuleView] */
+        Page_AvailabilityRuleView_: {
+            /** Items */
+            items: components["schemas"]["AvailabilityRuleView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[CatalogView] */
+        Page_CatalogView_: {
+            /** Items */
+            items: components["schemas"]["CatalogView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[DoctorView] */
+        Page_DoctorView_: {
+            /** Items */
+            items: components["schemas"]["DoctorView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[DocumentView] */
+        Page_DocumentView_: {
+            /** Items */
+            items: components["schemas"]["DocumentView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[PatientListView] */
+        Page_PatientListView_: {
+            /** Items */
+            items: components["schemas"]["PatientListView"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** PatientAuthResponse */
+        PatientAuthResponse: {
+            /** Status */
+            status: string;
+            /** Access Token */
+            access_token?: string | null;
+            /** Registration Token */
+            registration_token?: string | null;
+            patient?: components["schemas"]["PatientView"] | null;
+        };
         /** PatientIdentify */
         PatientIdentify: {
-            /**
-             * Tenant Id
-             * @default clinic-alyvo
-             */
-            tenant_id: string;
             /** Cpf */
             cpf: string;
             /**
@@ -867,13 +1509,26 @@ export interface components {
              */
             birth_date: string;
         };
+        /** PatientListView */
+        PatientListView: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Cpf */
+            cpf: string;
+            /** Birth Date */
+            birth_date: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** PatientRegister */
         PatientRegister: {
-            /**
-             * Tenant Id
-             * @default clinic-alyvo
-             */
-            tenant_id: string;
             /** Name */
             name: string;
             /** Email */
@@ -881,35 +1536,92 @@ export interface components {
             /** Registration Token */
             registration_token: string;
         };
-        /** RefreshRequest */
-        RefreshRequest: {
-            /** Refresh Token */
-            refresh_token: string;
+        /** PatientView */
+        PatientView: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
         };
-        /** SessionCreate */
-        SessionCreate: {
+        /** PendingTool */
+        PendingTool: {
+            /** Name */
+            name: string;
+            /** Arguments */
+            arguments: components["schemas"]["EmptyArguments"] | components["schemas"]["SearchDirectoryArguments"] | components["schemas"]["AvailabilityArguments"] | components["schemas"]["KnowledgeArguments"] | components["schemas"]["CreateAppointmentArguments"] | components["schemas"]["CancelAppointmentArguments"];
+        };
+        /** PublishDocument */
+        PublishDocument: {
+            /** Entities */
+            entities?: components["schemas"]["KnowledgeEntity"][];
             /**
-             * Tenant Id
-             * @default clinic-alyvo
+             * Confirmed
+             * @default true
              */
-            tenant_id: string;
+            confirmed: boolean;
+        };
+        /** ReadinessResponse */
+        ReadinessResponse: {
+            /** Status */
+            status: string;
+            /** Database */
+            database: string;
+        };
+        /** SearchDirectoryArguments */
+        SearchDirectoryArguments: {
+            /**
+             * Query
+             * @default
+             */
+            query: string;
         };
         /** SessionResponse */
         SessionResponse: {
             /** Id */
             id: string;
-            /** Tenant Id */
-            tenant_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
             /**
              * Expires At
              * Format: date-time
              */
             expires_at: string;
         };
-        /** StaffAppointmentPayload */
-        StaffAppointmentPayload: {
-            /** Patient Id */
-            patient_id: string;
+        /** SlotDoctorView */
+        SlotDoctorView: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Crm */
+            crm: string;
+        };
+        /** SlotUnitView */
+        SlotUnitView: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Address */
+            address: string;
+        };
+        /** SpecialtiesResult */
+        SpecialtiesResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "specialties";
+            /** Items */
+            items: components["schemas"]["CatalogItem"][];
+            /** Total */
+            total: number;
+        };
+        /** StaffAppointmentCreate */
+        StaffAppointmentCreate: {
             /** Doctor Id */
             doctor_id: string;
             /**
@@ -922,14 +1634,11 @@ export interface components {
              * @default Consulta
              */
             reason: string;
+            /** Patient Id */
+            patient_id: string;
         };
         /** StaffLogin */
         StaffLogin: {
-            /**
-             * Tenant Id
-             * @default clinic-alyvo
-             */
-            tenant_id: string;
             /** Email */
             email: string;
             /** Password */
@@ -942,53 +1651,46 @@ export interface components {
             /** Message */
             message: string;
         };
-        /** TextIngestionPayload */
-        TextIngestionPayload: {
+        /** TextDocumentCreate */
+        TextDocumentCreate: {
             /** Title */
             title: string;
             /** Content */
             content: string;
         };
-        /** ToolCallResponse */
-        ToolCallResponse: {
+        /** TokenBody */
+        TokenBody: {
+            /** Refresh Token */
+            refresh_token: string;
+        };
+        /** TokenResponse */
+        TokenResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Refresh Token */
+            refresh_token: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+        };
+        /** ToolCallView */
+        ToolCallView: {
             /** Name */
             name: string;
         };
-        /** ToolResult */
-        ToolResult: {
-            /** Type */
-            type: string;
+        /** UnitsResult */
+        UnitsResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "units";
             /** Items */
-            items?: {
-                [key: string]: unknown;
-            }[] | null;
-            /** Appointment */
-            appointment?: {
-                [key: string]: unknown;
-            } | null;
-            /** Timezone */
-            timezone?: string | null;
+            items: components["schemas"]["CatalogItem"][];
             /** Total */
-            total?: number | null;
-            /** Has More */
-            has_more?: boolean | null;
-            /** Query Summary */
-            query_summary?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
+            total: number;
         };
     };
     responses: never;
@@ -999,7 +1701,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_get: {
+    liveness_health_live_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1014,12 +1716,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LivenessResponse"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    deep_health_health_deep_get: {
+    readiness_health_ready_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1034,7 +1781,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Dependência indisponível */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessResponse"];
                 };
             };
         };
@@ -1054,12 +1855,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MetaResponse"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    identify_patient_api_v1_auth_patient_identify_post: {
+    identify_api_v1_auth_patients_identify_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1078,21 +1924,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PatientAuthResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    register_patient_api_v1_auth_patient_register_post: {
+    register_api_v1_auth_patients_register_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1111,21 +1993,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PatientAuthResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    login_staff_api_v1_auth_staff_login_post: {
+    login_api_v1_auth_staff_login_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1144,21 +2062,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    refresh_api_v1_auth_refresh_post: {
+    refresh_api_v1_auth_tokens_refresh_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1167,7 +2121,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RefreshRequest"];
+                "application/json": components["schemas"]["TokenBody"];
             };
         };
         responses: {
@@ -1177,16 +2131,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1200,7 +2190,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LogoutRequest"];
+                "application/json": components["schemas"]["TokenBody"];
             };
         };
         responses: {
@@ -1211,21 +2201,57 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    public_doctor_directory_api_v1_directory_doctors_get: {
+    doctors_api_v1_directory_doctors_get: {
         parameters: {
             query?: {
-                tenant_id?: string;
+                q?: string;
             };
             header?: never;
             path?: never;
@@ -1239,32 +2265,66 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_DoctorView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    list_availability_api_v1_availability_get: {
+    availability_api_v1_appointments_availability_get: {
         parameters: {
-            query?: {
-                day?: string | null;
-                from_date?: string | null;
+            query: {
+                from_date: string;
                 to_date?: string | null;
                 doctor_id?: string | null;
                 specialty_id?: string | null;
                 unit_id?: string | null;
                 insurer_id?: string | null;
                 period?: string | null;
-                tenant_id?: string;
             };
             header?: never;
             path?: never;
@@ -1278,16 +2338,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AvailabilityPage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1295,9 +2391,7 @@ export interface operations {
     create_appointment_api_v1_appointments_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1313,16 +2407,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1330,9 +2460,7 @@ export interface operations {
     my_appointments_api_v1_appointments_me_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1344,28 +2472,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_AppointmentView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    cancel_appointment_api_v1_appointments__appointment_id__cancel_post: {
+    cancel_appointment_api_v1_appointments__appointment_id__delete: {
         parameters: {
-            query?: {
-                confirmed?: boolean;
-            };
-            header?: {
-                authorization?: string | null;
-            };
+            query?: never;
+            header?: never;
             path: {
                 appointment_id: string;
             };
@@ -1374,21 +2534,55 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Autenticação necessária */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1396,17 +2590,11 @@ export interface operations {
     create_session_api_v1_chat_sessions_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionCreate"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             201: {
@@ -1417,13 +2605,49 @@ export interface operations {
                     "application/json": components["schemas"]["SessionResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1431,9 +2655,7 @@ export interface operations {
     post_message_api_v1_chat_sessions__session_id__messages_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 session_id: string;
             };
@@ -1454,13 +2676,49 @@ export interface operations {
                     "application/json": components["schemas"]["ChatResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1468,9 +2726,7 @@ export interface operations {
     stream_message_api_v1_chat_sessions__session_id__messages_stream_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 session_id: string;
             };
@@ -1482,22 +2738,58 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Eventos SSE status, delta, final ou error */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "text/event-stream": string;
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1505,9 +2797,7 @@ export interface operations {
     resume_api_v1_chat_sessions__session_id__resume_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 session_id: string;
             };
@@ -1524,23 +2814,57 @@ export interface operations {
                     "application/json": components["schemas"]["ChatResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    request_action_api_v1_chat_sessions__session_id__actions_post: {
+    action_api_v1_chat_sessions__session_id__actions_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 session_id: string;
             };
@@ -1561,23 +2885,57 @@ export interface operations {
                     "application/json": components["schemas"]["ChatResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    confirm_action_api_v1_chat_sessions__session_id__confirmations__confirmation_id__post: {
+    confirm_api_v1_chat_sessions__session_id__confirmations__confirmation_id__post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 session_id: string;
                 confirmation_id: string;
@@ -1599,186 +2957,49 @@ export interface operations {
                     "application/json": components["schemas"]["ChatResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    dashboard_api_v1_backoffice_dashboard_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    agenda_api_v1_backoffice_agenda_get: {
-        parameters: {
-            query: {
-                start: string;
-                end: string;
-                doctor_id?: string | null;
-                unit_id?: string | null;
-                status?: string | null;
-            };
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_staff_appointment_api_v1_backoffice_appointments_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StaffAppointmentPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_staff_appointment_api_v1_backoffice_appointments__appointment_id__patch: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                appointment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StaffAppointmentPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_staff_appointment_api_v1_backoffice_appointments__appointment_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                appointment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1789,9 +3010,7 @@ export interface operations {
                 q?: string;
                 include_inactive?: boolean;
             };
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1803,16 +3022,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_DoctorView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1820,9 +3075,7 @@ export interface operations {
     create_doctor_api_v1_backoffice_doctors_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1838,16 +3091,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DoctorView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1855,9 +3144,7 @@ export interface operations {
     update_doctor_api_v1_backoffice_doctors__doctor_id__put: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 doctor_id: string;
             };
@@ -1875,26 +3162,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DoctorView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    archive_doctor_api_v1_backoffice_doctors__doctor_id__delete: {
+    delete_doctor_api_v1_backoffice_doctors__doctor_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 doctor_id: string;
             };
@@ -1909,18 +3230,54 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    list_catalog_api_v1_backoffice_catalog__kind__get: {
+    list_specialties_api_v1_backoffice_specialties_get: {
         parameters: {
             query?: {
                 q?: string;
@@ -1928,12 +3285,8 @@ export interface operations {
                 page?: number;
                 page_size?: number;
             };
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                kind: string;
-            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -1944,29 +3297,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_CatalogView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    create_catalog_api_v1_backoffice_catalog__kind__post: {
+    create_specialties_api_v1_backoffice_specialties_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path: {
-                kind: string;
-            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -1981,28 +3366,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CatalogView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    archive_catalog_api_v1_backoffice_catalog__kind___item_id__delete: {
+    delete_specialties_api_v1_backoffice_specialties__item_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
-                kind: string;
                 item_id: string;
             };
             cookie?: never;
@@ -2016,25 +3434,58 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    update_catalog_api_v1_backoffice_catalog__kind___item_id__patch: {
+    update_specialties_api_v1_backoffice_specialties__item_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
-                kind: string;
                 item_id: string;
             };
             cookie?: never;
@@ -2051,16 +3502,942 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CatalogView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_units_api_v1_backoffice_units_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                include_inactive?: boolean;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_CatalogView_"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_units_api_v1_backoffice_units_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_units_api_v1_backoffice_units__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_units_api_v1_backoffice_units__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_insurers_api_v1_backoffice_insurers_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                include_inactive?: boolean;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_CatalogView_"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_insurers_api_v1_backoffice_insurers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_insurers_api_v1_backoffice_insurers__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_insurers_api_v1_backoffice_insurers__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_exams_api_v1_backoffice_exams_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                include_inactive?: boolean;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_CatalogView_"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_exams_api_v1_backoffice_exams_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_exams_api_v1_backoffice_exams__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_exams_api_v1_backoffice_exams__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    dashboard_api_v1_backoffice_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2070,9 +4447,7 @@ export interface operations {
             query?: {
                 q?: string;
             };
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2084,26 +4459,65 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_PatientListView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    availability_rules_api_v1_backoffice_availability_rules_get: {
+    appointments_api_v1_backoffice_appointments_get: {
         parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
+            query: {
+                start: string;
+                end: string;
+                doctor_id?: string | null;
+                unit_id?: string | null;
             };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2115,16 +4529,322 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_AppointmentView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_appointment_api_v1_backoffice_appointments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAppointmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_appointment_api_v1_backoffice_appointments__appointment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_appointment_api_v1_backoffice_appointments__appointment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rules_api_v1_backoffice_availability_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_AvailabilityRuleView_"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2132,9 +4852,7 @@ export interface operations {
     create_rule_api_v1_backoffice_availability_rules_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2150,16 +4868,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AvailabilityRuleView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2167,9 +4921,7 @@ export interface operations {
     delete_rule_api_v1_backoffice_availability_rules__rule_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 rule_id: string;
             };
@@ -2184,13 +4936,49 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2198,9 +4986,7 @@ export interface operations {
     update_rule_api_v1_backoffice_availability_rules__rule_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 rule_id: string;
             };
@@ -2218,26 +5004,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AvailabilityRuleView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    availability_blocks_api_v1_backoffice_availability_blocks_get: {
+    blocks_api_v1_backoffice_availability_blocks_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2249,16 +5069,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_AvailabilityBlockView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2266,9 +5122,7 @@ export interface operations {
     create_block_api_v1_backoffice_availability_blocks_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2284,16 +5138,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AvailabilityBlockView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2301,9 +5191,7 @@ export interface operations {
     delete_block_api_v1_backoffice_availability_blocks__block_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 block_id: string;
             };
@@ -2318,58 +5206,57 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    upload_ingestion_api_v1_backoffice_ingestions_upload_post: {
+    documents_api_v1_backoffice_knowledge_documents_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_ingestion_api_v1_backoffice_ingestions_upload_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ingestions_api_v1_backoffice_ingestions_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2381,32 +5268,66 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_DocumentView_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    create_text_ingestion_api_v1_backoffice_ingestions_post: {
+    create_document_api_v1_backoffice_knowledge_documents_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TextIngestionPayload"];
+                "application/json": components["schemas"]["TextDocumentCreate"];
             };
         };
         responses: {
@@ -2416,26 +5337,129 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocumentView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    approve_ingestion_api_v1_backoffice_ingestions__document_id__approve_post: {
+    upload_api_v1_backoffice_knowledge_uploads_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_api_v1_backoffice_knowledge_uploads_post"];
             };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentView"];
+                };
+            };
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    publish_api_v1_backoffice_knowledge_documents__document_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
             path: {
                 document_id: string;
             };
@@ -2443,7 +5467,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IngestionReview"];
+                "application/json": components["schemas"]["PublishDocument"];
             };
         };
         responses: {
@@ -2453,26 +5477,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocumentView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    reject_ingestion_api_v1_backoffice_ingestions__document_id__reject_post: {
+    reject_api_v1_backoffice_knowledge_documents__document_id__reject_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 document_id: string;
             };
@@ -2486,16 +5544,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocumentView"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Autenticação necessária */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Operação não autorizada */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Recurso não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflito de negócio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Entrada ou regra inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

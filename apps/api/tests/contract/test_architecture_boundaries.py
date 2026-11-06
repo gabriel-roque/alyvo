@@ -29,16 +29,20 @@ def test_domain_has_no_framework_or_infrastructure_dependencies():
         str(path.relative_to(ROOT)): sorted(
             name for name in imports(path) if name.startswith(forbidden)
         )
-        for path in python_files(APP / "domain")
+        for module in (APP / "modules").iterdir()
+        if module.is_dir()
+        for path in python_files(module / "domain")
     }
     assert not {path: names for path, names in violations.items() if names}
 
 
-def test_new_agent_tool_and_retrieval_layers_do_not_import_routers():
+def test_agent_does_not_import_http_layer():
     violations = {}
-    for package in ("agent", "tools", "retrieval"):
+    for package in ("agent",):
         for path in python_files(APP / package):
-            bad = sorted(name for name in imports(path) if name.startswith("app.routers"))
+            bad = sorted(
+                name for name in imports(path) if name.startswith(("app.routers", "app.api"))
+            )
             if bad:
                 violations[str(path.relative_to(ROOT))] = bad
     assert not violations

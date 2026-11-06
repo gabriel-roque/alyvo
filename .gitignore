@@ -3,6 +3,8 @@
 .DS_Store
 node_modules/
 .next/
+apps/docs/.docusaurus/
+apps/docs/build/
 coverage/
 playwright-report/
 test-results/

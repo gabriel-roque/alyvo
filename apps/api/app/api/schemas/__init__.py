@@ -1,3 +1,4 @@
-from app.api.schemas.chat import ChatResponse, SessionResponse
+from app.api.schemas.chat import ChatResponse
+from app.api.schemas.common import ErrorResponse, Page
 
-__all__ = ["ChatResponse", "SessionResponse"]
+__all__ = ["ChatResponse", "ErrorResponse", "Page"]

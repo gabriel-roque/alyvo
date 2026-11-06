@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test test/*.test.mjs && vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -21,12 +21,15 @@
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "24.10.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "eslint": "9.39.1",
     "eslint-config-next": "16.4.3",
-    "typescript": "5.9.3"
+    "jsdom": "^27.4.0",
+    "typescript": "5.9.3",
+    "vitest": "^4.0.18"
   }
 }
-

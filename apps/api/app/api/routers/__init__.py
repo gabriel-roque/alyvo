@@ -1,9 +1,4 @@
-"""Version-one HTTP routers.
+from app.api.routers import auth, chat, public
+from app.api.routers.backoffice import router as backoffice_router
 
-Compatibility modules keep the public routes stable while the composition root
-uses the new API package boundary.
-"""
-
-from app.routers import auth, backoffice, chat, operations
-
-__all__ = ["auth", "backoffice", "chat", "operations"]
+__all__ = ["auth", "backoffice_router", "chat", "public"]

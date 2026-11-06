@@ -1,33 +1,21 @@
 "use client";
 
-import { ArrowLeft, BookOpen, CalendarDays, Check, Clock3, Send, ShieldCheck, Sparkles, Stethoscope, UserRound } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarDays, Check, Send, ShieldCheck, Sparkles, Stethoscope, UserRound } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useReducer, useRef, useState } from "react";
 import { Brand } from "@/components/brand";
+import { identifyPatient, registerPatient } from "@/features/auth/api";
+import { ToolResultRenderer } from "@/features/chat/tool-result";
 import {
-  ChatResponse,
-  Citation,
   confirmChatAction,
   createChatSession,
-  identifyPatient,
-  registerPatient,
   requestChatAction,
   resumeChat,
   streamMessage,
-} from "@/lib/api";
+  type ChatResponse,
+  type Citation,
+} from "@/features/chat/api";
 
-type ToolItem = {
-  id: string;
-  doctor?: string | { id: string; name: string };
-  unit?: string | { id: string; name: string };
-  starts_at?: string;
-  status?: string;
-  reason?: string;
-  crm?: string;
-  specialty?: string;
-  insurers?: string[];
-  address?: string;
-};
 type Message = {
   role: "user" | "assistant";
   content: string;
@@ -35,17 +23,20 @@ type Message = {
   response?: ChatResponse;
 };
 
+type MessageAction = { type: "append"; message: Message };
+
+function messageReducer(state: Message[], action: MessageAction): Message[] {
+  if (action.type === "append") return [...state, action.message];
+  return state;
+}
+
 const welcome: Message = {
   role: "assistant",
   content: "Olá! Posso ajudar com médicos, convênios, exames, horários e suas consultas. Você pode começar sem se identificar.",
 };
 
-function label(value: string | { id: string; name: string } | undefined) {
-  return typeof value === "string" ? value : value?.name ?? "—";
-}
-
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([welcome]);
+  const [messages, dispatchMessage] = useReducer(messageReducer, [welcome]);
   const [text, setText] = useState("");
   const [session, setSession] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -69,13 +60,13 @@ export default function ChatPage() {
   }
 
   function appendResponse(response: ChatResponse) {
-    setMessages((current) => [...current, { role: "assistant", content: response.answer, citations: response.citations, response }]);
+    dispatchMessage({ type: "append", message: { role: "assistant", content: response.answer, citations: response.citations, response } });
     window.setTimeout(() => streamEnd.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
 
   async function sendPrompt(content: string) {
     if (!content || loading) return;
-    setMessages((current) => [...current, { role: "user", content }]);
+    dispatchMessage({ type: "append", message: { role: "user", content } });
     setText("");
     setLoading(true);
     setActivity("Entendendo seu pedido…");
@@ -118,7 +109,7 @@ export default function ChatPage() {
         setIdentifiedName(result.patient?.name ?? "Paciente");
       } else {
         const result = await registerPatient({ name, email, registration_token: registrationToken });
-        setIdentifiedName(result.patient.name);
+        setIdentifiedName(result.patient?.name ?? name);
       }
       if (session) appendResponse(await resumeChat(session));
     } catch (error) {
@@ -128,7 +119,10 @@ export default function ChatPage() {
     }
   }
 
-  async function action(tool: string, arguments_: Record<string, unknown>) {
+  async function action(
+    tool: string,
+    arguments_: { doctor_id: string; starts_at: string; reason: string } | { appointment_id: string },
+  ) {
     setLoading(true);
     setNotice("");
     try {
@@ -173,7 +167,6 @@ export default function ChatPage() {
         <div className="message-stream" aria-live="polite">
           {messages.map((message, index) => {
             const result = message.response?.tool_result;
-            const items = (result?.items ?? []) as ToolItem[];
             return (
               <article className={`chat-message ${message.role}`} key={`${index}-${message.content.slice(0, 16)}`}>
                 {message.role === "assistant" && <span className="message-avatar">A</span>}
@@ -200,51 +193,7 @@ export default function ChatPage() {
                     </section>
                   )}
 
-                  {result?.type === "availability" && (
-                    <div className="tool-cards">
-                      {items.map((item) => (
-                        <button key={item.id} onClick={() => void action("create_appointment", { doctor_id: typeof item.doctor === "object" ? item.doctor.id : "", starts_at: item.starts_at, reason: "Consulta" })}>
-                          <span className="tool-icon"><CalendarDays /></span>
-                          <span><strong>{label(item.doctor)}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone ?? undefined, weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)}</small></span>
-                          <span className="tool-action">Agendar</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {result?.type === "directory" && (
-                    <div className="tool-cards directory-cards">
-                      {items.map((item) => (
-                        <div className="appointment-tool" key={item.id}>
-                          <span className="tool-icon"><Stethoscope /></span>
-                          <span><strong>{label(item.doctor)}</strong><small>{item.specialty} · {label(item.unit)} · {item.insurers?.join(", ")}</small></span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {result?.type === "units" && (
-                    <div className="tool-cards directory-cards">
-                      {items.map((item) => (
-                        <div className="appointment-tool" key={item.id}>
-                          <span className="tool-icon"><CalendarDays /></span>
-                          <span><strong>{label(item.unit)}</strong><small>{item.address}</small></span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {result?.type === "appointments" && (
-                    <div className="tool-cards">
-                      {items.map((item) => (
-                        <div className="appointment-tool" key={item.id}>
-                          <span className="tool-icon"><Clock3 /></span>
-                          <span><strong>{label(item.doctor) || item.reason}</strong><small>{new Date(item.starts_at ?? "").toLocaleString("pt-BR", { timeZone: result.timezone ?? undefined, weekday: "long", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {label(item.unit)} · {item.status === "confirmed" ? "confirmada" : "cancelada"}</small></span>
-                          {item.status === "confirmed" && <button onClick={() => void action("cancel_appointment", { appointment_id: item.id })}>Cancelar</button>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {result && <ToolResultRenderer result={result} onAction={(tool, arguments_) => void action(tool, arguments_)} />}
 
                   {message.response?.confirmation_request && (
                     <section className="confirmation-card">
@@ -256,8 +205,6 @@ export default function ChatPage() {
                       </div>
                     </section>
                   )}
-
-                  {message.response?.tool_result?.appointment && <p className="operation-success"><Check /> Operação concluída com segurança.</p>}
 
                   {message.citations?.length ? (
                     <details className="citations">

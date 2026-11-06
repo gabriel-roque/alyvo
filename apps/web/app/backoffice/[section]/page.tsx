@@ -3,18 +3,34 @@
 import { Archive, Check, ChevronRight, Pencil, Plus, Search, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { backofficeGet, backofficeMutate } from "@/lib/api";
+import {
+  archiveCatalog,
+  archiveDoctor,
+  listCatalog,
+  listDoctors,
+  listPatients,
+  saveCatalog,
+  saveDoctor,
+} from "@/features/backoffice/catalog/api";
+import type { Catalog, CatalogKind } from "@/lib/api";
 
-type Item = Record<string, unknown> & { id: string; name?: string; active?: boolean };
-type Definition = { title: string; endpoint: string; kind?: string; description: string };
+type Item = {
+  id: string; name: string; active?: boolean; crm?: string; specialty_id?: string;
+  specialty?: string; unit_id?: string; unit?: string; insurer_ids?: string[];
+  insurers?: string[]; description?: string; address?: string; preparation?: string;
+  unit_ids?: string[]; cpf?: string; birth_date?: string | null; email?: string;
+  created_at?: string;
+};
+type Definition = { title: string; kind?: CatalogKind; description: string };
+type CatalogOptions = { specialties: Catalog[]; units: Catalog[]; insurers: Catalog[] };
 
 const definitions: Record<string, Definition> = {
-  medicos: { title: "Médicos", endpoint: "/doctors", description: "Profissionais, especialidades, unidades e convênios." },
-  especialidades: { title: "Especialidades", endpoint: "/catalog/specialties", kind: "specialties", description: "Áreas de atendimento disponíveis na clínica." },
-  convenios: { title: "Convênios", endpoint: "/catalog/insurers", kind: "insurers", description: "Operadoras aceitas pelos profissionais." },
-  exames: { title: "Exames", endpoint: "/catalog/exams", kind: "exams", description: "Exames, preparos e unidades de realização." },
-  unidades: { title: "Unidades", endpoint: "/catalog/units", kind: "units", description: "Locais de atendimento da clínica." },
-  pacientes: { title: "Pacientes", endpoint: "/patients", description: "Consulta segura dos pacientes identificados." },
+  medicos: { title: "Médicos", description: "Profissionais, especialidades, unidades e convênios." },
+  especialidades: { title: "Especialidades", kind: "specialties", description: "Áreas de atendimento disponíveis na clínica." },
+  convenios: { title: "Convênios", kind: "insurers", description: "Operadoras aceitas pelos profissionais." },
+  exames: { title: "Exames", kind: "exams", description: "Exames, preparos e unidades de realização." },
+  unidades: { title: "Unidades", kind: "units", description: "Locais de atendimento da clínica." },
+  pacientes: { title: "Pacientes", description: "Consulta segura dos pacientes identificados." },
 };
 
 const blank = { name: "", crm: "", specialty_id: "", unit_id: "", insurer_ids: [] as string[], description: "", address: "", preparation: "", unit_ids: [] as string[], active: true };
@@ -24,7 +40,7 @@ export default function BackofficeSectionPage() {
   const router = useRouter();
   const definition = definitions[section];
   const [items, setItems] = useState<Item[]>([]);
-  const [catalogs, setCatalogs] = useState<Record<string, Item[]>>({});
+  const [catalogs, setCatalogs] = useState<CatalogOptions>({ specialties: [], units: [], insurers: [] });
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,15 +56,16 @@ export default function BackofficeSectionPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await backofficeGet(`${definition.endpoint}?q=${encodeURIComponent(query)}&include_inactive=true`);
-      setItems(result.items as Item[]);
+      if (section === "medicos") setItems((await listDoctors(query)).items);
+      else if (section === "pacientes") setItems((await listPatients(query)).items);
+      else if (definition.kind) setItems((await listCatalog(definition.kind, query)).items);
       if (section === "medicos" || section === "exames") {
         const [specialties, units, insurers] = await Promise.all([
-          backofficeGet("/catalog/specialties"),
-          backofficeGet("/catalog/units"),
-          backofficeGet("/catalog/insurers"),
+          listCatalog("specialties", "", false),
+          listCatalog("units", "", false),
+          listCatalog("insurers", "", false),
         ]);
-        setCatalogs({ specialties: specialties.items as Item[], units: units.items as Item[], insurers: insurers.items as Item[] });
+        setCatalogs({ specialties: specialties.items, units: units.items, insurers: insurers.items });
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível carregar os dados.");
@@ -67,11 +84,11 @@ export default function BackofficeSectionPage() {
       crm: String(item.crm ?? ""),
       specialty_id: String(item.specialty_id ?? ""),
       unit_id: String(item.unit_id ?? ""),
-      insurer_ids: (item.insurer_ids as string[] | undefined) ?? [],
+      insurer_ids: item.insurer_ids ?? [],
       description: String(item.description ?? ""),
       address: String(item.address ?? ""),
       preparation: String(item.preparation ?? ""),
-      unit_ids: (item.unit_ids as string[] | undefined) ?? [],
+      unit_ids: item.unit_ids ?? [],
       active: Boolean(item.active ?? true),
     } : { ...blank, specialty_id: catalogs.specialties?.[0]?.id ?? "", unit_id: catalogs.units?.[0]?.id ?? "" });
     setDrawer(true);
@@ -84,13 +101,11 @@ export default function BackofficeSectionPage() {
     setSaving(true);
     setError("");
     try {
-      const path = section === "medicos"
-        ? `/doctors${editing ? `/${editing.id}` : ""}`
-        : `/catalog/${definition.kind}${editing ? `/${editing.id}` : ""}`;
-      const payload = section === "medicos"
-        ? { name: form.name, crm: form.crm, specialty_id: form.specialty_id, unit_id: form.unit_id, insurer_ids: form.insurer_ids, active: form.active }
-        : { name: form.name, description: form.description, address: form.address, preparation: form.preparation, unit_ids: form.unit_ids, active: form.active };
-      await backofficeMutate(path, { method: editing ? (section === "medicos" ? "PUT" : "PATCH") : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (section === "medicos") {
+        await saveDoctor({ name: form.name, crm: form.crm, specialty_id: form.specialty_id, unit_id: form.unit_id, insurer_ids: form.insurer_ids, active: form.active }, editing?.id);
+      } else if (definition.kind) {
+        await saveCatalog(definition.kind, { name: form.name, description: form.description, address: form.address, preparation: form.preparation, unit_ids: form.unit_ids, active: form.active }, editing?.id);
+      }
       setDrawer(false);
       setMessage(editing ? "Alterações salvas." : "Cadastro criado.");
       await load();
@@ -105,8 +120,8 @@ export default function BackofficeSectionPage() {
     if (!archive || !definition) return;
     setSaving(true);
     try {
-      const path = section === "medicos" ? `/doctors/${archive.id}` : `/catalog/${definition.kind}/${archive.id}`;
-      await backofficeMutate(path, { method: "DELETE" });
+      if (section === "medicos") await archiveDoctor(archive.id);
+      else if (definition.kind) await archiveCatalog(definition.kind, archive.id);
       setArchive(null);
       setMessage("Registro arquivado. O histórico foi preservado.");
       await load();
@@ -129,10 +144,10 @@ export default function BackofficeSectionPage() {
   if (!definition) return null;
 
   function cells(item: Item) {
-    if (section === "medicos") return [item.name, item.crm, item.specialty, item.unit, (item.insurers as string[] | undefined)?.join(", ") || "—", item.active ? "Ativo" : "Arquivado"];
+    if (section === "medicos") return [item.name, item.crm, item.specialty, item.unit, item.insurers?.join(", ") || "—", item.active ? "Ativo" : "Arquivado"];
     if (section === "especialidades") return [item.name, item.description || "—", item.active ? "Ativa" : "Arquivada"];
     if (section === "convenios") return [item.name, item.active ? "Ativo" : "Arquivado"];
-    if (section === "exames") return [item.name, item.preparation || "Sem preparo informado", `${(item.unit_ids as string[] | undefined)?.length ?? 0} unidade(s)`, item.active ? "Ativo" : "Arquivado"];
+    if (section === "exames") return [item.name, item.preparation || "Sem preparo informado", `${item.unit_ids?.length ?? 0} unidade(s)`, item.active ? "Ativo" : "Arquivado"];
     if (section === "unidades") return [item.name, item.address || "—", item.active ? "Ativa" : "Arquivada"];
     return [item.name, item.cpf, item.birth_date ? new Date(String(item.birth_date) + "T12:00:00").toLocaleDateString("pt-BR") : "Não informado", item.email, new Date(String(item.created_at)).toLocaleDateString("pt-BR")];
   }

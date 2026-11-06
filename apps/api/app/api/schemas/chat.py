@@ -1,92 +1,64 @@
-from __future__ import annotations
-
 from datetime import datetime
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
-
-class StrictRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+from app.agent.tools.models import ToolArgumentsUnion, ToolResult
+from app.api.schemas.common import StrictModel
 
 
-class SessionCreate(StrictRequest):
-    tenant_id: str = "clinic-alyvo"
+class SessionResponse(StrictModel):
+    id: str
+    created_at: datetime
+    expires_at: datetime
 
 
-class MessageCreate(StrictRequest):
+class MessageCreate(StrictModel):
     content: str = Field(min_length=1, max_length=4000)
 
 
-class ActionCreate(StrictRequest):
+class ActionCreate(StrictModel):
     tool: str
-    arguments: dict[str, Any] = Field(default_factory=dict)
+    arguments: ToolArgumentsUnion
 
 
-class ConfirmationBody(StrictRequest):
-    accepted: bool
+class ConfirmationBody(StrictModel):
+    accepted: bool = True
 
 
-class Citation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class Citation(StrictModel):
     title: str
     source: str
     excerpt: str
 
 
-class ConfirmationRequest(BaseModel):
-    model_config = ConfigDict(extra="allow")
+class Suggestion(StrictModel):
+    label: str
+    message: str
 
+
+class ConfirmationRequest(StrictModel):
     id: str
     tool: str
     summary: str
 
 
-class ToolCallResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ToolCallView(StrictModel):
     name: str
 
 
-class Suggestion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    label: str
-    message: str
+class PendingTool(StrictModel):
+    name: str
+    arguments: ToolArgumentsUnion
 
 
-class ToolResult(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    type: str
-    items: list[dict[str, Any]] | None = None
-    appointment: dict[str, Any] | None = None
-    timezone: str | None = None
-    total: int | None = None
-    has_more: bool | None = None
-    query_summary: str | None = None
-
-
-class ChatResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
+class ChatResponse(StrictModel):
     answer: str
     intent: str
-    confidence: float = Field(ge=0, le=1)
+    confidence: float
     citations: list[Citation] = Field(default_factory=list)
     auth_required: bool = False
     confirmation_request: ConfirmationRequest | None = None
     tool_result: ToolResult | None = None
-    tool_call: ToolCallResponse | None = None
+    tool_call: ToolCallView | None = None
     suggestions: list[Suggestion] = Field(default_factory=list)
-    resolved_request: dict[str, Any] | None = None
-
-
-class SessionResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    tenant_id: str
-    expires_at: datetime
+    pending_tool: PendingTool | None = None

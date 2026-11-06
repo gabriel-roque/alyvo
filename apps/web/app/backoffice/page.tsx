@@ -2,15 +2,10 @@
 
 import { BookOpenCheck, CalendarCheck2, CalendarDays, Users } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { backofficeGet } from "@/lib/api";
-
-type Dashboard = { appointments_today: number; confirmed_today: number; patients: number; knowledge_pending: number };
+import { useDashboard } from "@/features/backoffice/dashboard/use-dashboard";
 
 export default function DashboardPage() {
-  const [data, setData] = useState<Dashboard | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => { void backofficeGet("/dashboard").then((result) => setData(result as unknown as Dashboard)).catch(() => setError("Entre com uma conta da equipe para continuar.")); }, []);
+  const { data, error } = useDashboard();
   return (
     <section className="dashboard-page">
         <header className="page-heading"><p className="eyebrow">Operação</p><h1>Visão geral</h1><p>O que precisa da sua atenção hoje.</p></header>

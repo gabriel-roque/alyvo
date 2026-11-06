@@ -11,37 +11,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { version: "0.9.18", enable-cache: true }
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
+        with: { python-version: "3.12" }
       - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - run: pip install -e '.[dev]'
+        with: { node-version: "22", cache: npm }
+      - run: uv sync --frozen --extra dev
       - run: npm ci
-      - run: python -m ruff check apps/api apps/worker datasets evaluations tests conftest.py
-      - run: python -m ruff format --check apps/api apps/worker datasets evaluations tests conftest.py
-      - run: python -m mypy --no-incremental apps/api/app/agent apps/api/app/api apps/api/app/core apps/api/app/domain apps/api/app/infrastructure apps/api/app/prompts apps/api/app/retrieval apps/api/app/tools
-      - run: APP_ENV=test LLM_PRIMARY_PROVIDER=mock LLM_FALLBACK_PROVIDER=mock EMBEDDING_PROVIDER=mock python -m pytest apps/api/tests -q
-      - run: python packages/contracts/generate.py
-        env:
-          APP_ENV: test
-          LLM_PRIMARY_PROVIDER: mock
-          LLM_FALLBACK_PROVIDER: mock
-          EMBEDDING_PROVIDER: mock
+      - run: uv run ruff check apps/api apps/worker scripts tests
+      - run: uv run ruff format --check apps/api apps/worker scripts tests
+      - run: uv run mypy --no-incremental apps/api/app apps/worker/worker
+      - run: uv run lint-imports
+      - run: uv run pytest --cov --cov-fail-under=80
+        env: { APP_ENV: test, LLM_PRIMARY_PROVIDER: mock, LLM_FALLBACK_PROVIDER: mock, EMBEDDING_PROVIDER: mock }
+      - run: uv run python packages/contracts/generate.py
+        env: { APP_ENV: test, API_DOCS_ENABLED: "true", LLM_PRIMARY_PROVIDER: mock, LLM_FALLBACK_PROVIDER: mock, EMBEDDING_PROVIDER: mock }
       - run: npm run generate:contracts
+      - run: git diff --exit-code -- packages/contracts
+      - run: uv run python scripts/validate-openapi.py
+      - run: uv run python scripts/check-maintainability.py
       - run: npm run test:web
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - run: npm run build:docs
 
   full-stack:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose --profile validation build validate
+      - run: docker compose --profile validation build
       - run: docker compose --profile validation up --abort-on-container-exit --exit-code-from validate validate
-

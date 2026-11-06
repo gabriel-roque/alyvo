@@ -2,12 +2,22 @@
 
 import { Archive, CalendarDays, ChevronLeft, ChevronRight, Clock3, Plus, SlidersHorizontal, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { backofficeGet, backofficeMutate } from "@/lib/api";
+import {
+  cancelAppointment as cancelAppointmentRequest,
+  createAppointment,
+  createAvailabilityBlock,
+  createAvailabilityRule,
+  listAgenda,
+  listAvailabilityBlocks,
+  listAvailabilityRules,
+  listCatalog,
+  listDoctors,
+  listPatients,
+  updateAppointment,
+} from "@/features/backoffice/agenda/api";
+import type { Appointment, AvailabilityBlock as Block, AvailabilityRule as Rule } from "@/lib/api";
 
 type Option = { id: string; name: string };
-type Appointment = { id: string; patient_id: string; patient: string; doctor_id: string; doctor: string; unit: string; starts_at: string; ends_at: string; status: string; reason: string };
-type Rule = { id: string; doctor_id: string; unit_id: string; weekday: number; starts_at: string; ends_at: string; slot_minutes: number; active: boolean };
-type Block = { id: string; doctor_id: string; starts_at: string; ends_at: string; reason: string };
 
 function isoDay(value: Date) { return value.toISOString().slice(0, 10); }
 function localInput(value: string) {
@@ -47,23 +57,20 @@ export default function AgendaPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ start: range.start, end: range.end });
-      if (doctorId) params.set("doctor_id", doctorId);
-      if (unitId) params.set("unit_id", unitId);
       const [agenda, doctorData, unitData, patientData, ruleData, blockData] = await Promise.all([
-        backofficeGet(`/agenda?${params}`),
-        backofficeGet("/doctors"),
-        backofficeGet("/catalog/units"),
-        backofficeGet("/patients"),
-        backofficeGet("/availability-rules"),
-        backofficeGet("/availability-blocks"),
+        listAgenda(range.start, range.end, doctorId || undefined, unitId || undefined),
+        listDoctors("", false),
+        listCatalog("units", "", false),
+        listPatients(),
+        listAvailabilityRules(),
+        listAvailabilityBlocks(),
       ]);
-      setItems(agenda.items as Appointment[]);
-      setDoctors(doctorData.items as Option[]);
-      setUnits(unitData.items as Option[]);
-      setPatients(patientData.items as Option[]);
-      setRules(ruleData.items as Rule[]);
-      setBlocks(blockData.items as Block[]);
+      setItems(agenda.items);
+      setDoctors(doctorData.items);
+      setUnits(unitData.items);
+      setPatients(patientData.items);
+      setRules(ruleData.items);
+      setBlocks(blockData.items);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao carregar a agenda."); }
     finally { setLoading(false); }
   }, [doctorId, range.end, range.start, unitId]);
@@ -86,7 +93,9 @@ export default function AgendaPage() {
   async function saveAppointment(event: FormEvent) {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      await backofficeMutate(`/appointments${editing ? `/${editing.id}` : ""}`, { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...appointment, starts_at: new Date(appointment.starts_at).toISOString() }) });
+      const starts_at = new Date(appointment.starts_at).toISOString();
+      if (editing) await updateAppointment(editing.id, { starts_at, reason: appointment.reason });
+      else await createAppointment({ ...appointment, starts_at });
       setPanel(null); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível salvar a consulta."); }
     finally { setSaving(false); }
@@ -95,21 +104,21 @@ export default function AgendaPage() {
   async function cancelAppointment() {
     if (!editing) return;
     setSaving(true);
-    try { await backofficeMutate(`/appointments/${editing.id}/cancel`, { method: "POST" }); setPanel(null); await load(); }
+    try { await cancelAppointmentRequest(editing.id); setPanel(null); await load(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível cancelar."); }
     finally { setSaving(false); }
   }
 
   async function createRule(event: FormEvent) {
     event.preventDefault(); setSaving(true);
-    try { await backofficeMutate("/availability-rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rule) }); await load(); }
+    try { await createAvailabilityRule({ ...rule, valid_from: null, valid_until: null, active: true }); await load(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível salvar a regra."); }
     finally { setSaving(false); }
   }
 
   async function createBlock(event: FormEvent) {
     event.preventDefault(); setSaving(true);
-    try { await backofficeMutate("/availability-blocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...block, starts_at: new Date(block.starts_at).toISOString(), ends_at: new Date(block.ends_at).toISOString() }) }); await load(); }
+    try { await createAvailabilityBlock({ ...block, starts_at: new Date(block.starts_at).toISOString(), ends_at: new Date(block.ends_at).toISOString() }); await load(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível criar o bloqueio."); }
     finally { setSaving(false); }
   }

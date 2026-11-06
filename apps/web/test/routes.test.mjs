@@ -20,7 +20,8 @@ for (const [route, marker] of routes) {
 }
 
 test("design tokens preserve the Alyvo palette and reduced motion", async () => {
-  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const files = ["../app/globals.css", "../styles/tokens.css", "../styles/base.css"];
+  const css = (await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")))).join("\n");
   for (const token of ["#f7f7f2", "#101828", "#2457ff", "#b8f34a", "#d8dde6", "prefers-reduced-motion"]) {
     assert.ok(css.includes(token), `missing design token ${token}`);
   }

@@ -1,28 +1,23 @@
 FROM mcr.microsoft.com/playwright:v1.56.1-noble
 
+COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /uvx /bin/
+
 WORKDIR /workspace
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3-pip python3-venv \
-    && rm -rf /var/lib/apt/lists/*
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/workspace/.venv/bin:$PATH" \
+    PYTHONPATH=/workspace/apps/api:/workspace/apps/worker
 
-COPY apps/api/requirements.txt ./api-requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu \
-    && python3 -m pip install --break-system-packages -r api-requirements.txt \
-       'pytest>=8.2,<9' 'pytest-asyncio>=0.23,<1' 'pytest-cov>=5,<8' \
-       'ruff>=0.5,<1' 'mypy>=1.13,<2' 'ragas>=0.4,<0.5' 'openai>=1,<3' \
-       'rapidfuzz>=3,<4'
-
-COPY pyproject.toml ./
-COPY apps/api ./apps/api
-COPY apps/worker ./apps/worker
-RUN python3 -m pip install --break-system-packages --no-deps -e .
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --extra dev --no-install-project
 
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
+COPY apps/docs/package.json apps/docs/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 RUN npm ci
 
 COPY . .
-ENV PYTHONPATH=/workspace/apps/api:/workspace/apps/worker
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --extra dev
 CMD ["bash", "scripts/validate-container.sh"]
