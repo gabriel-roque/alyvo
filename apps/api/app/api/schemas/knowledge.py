@@ -27,4 +27,10 @@ class DocumentView(StrictModel):
     entities: list[KnowledgeEntity]
     preview: str
     filename: str
+    error: str
     sync_status: str
+
+
+class KnowledgeUploadBatch(StrictModel):
+    items: list[DocumentView]
+    total: int

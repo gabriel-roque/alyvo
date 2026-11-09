@@ -12,6 +12,9 @@ def test_semantic_routes_are_canonical():
     chain = RuleChain()
     assert chain.classify("Quais são minhas consultas?").topic == Topic.OWN_APPOINTMENT
     assert chain.classify("Quero um horário com pediatra").topic == Topic.AVAILABILITY
+    opening_hours = chain.classify("Qual é o horário de abertura da clínica?")
+    assert opening_hours.domain == Domain.KNOWLEDGE
+    assert opening_hours.topic == Topic.INSTITUTIONAL
     assert chain.classify("Quais convênios vocês aceitam?").topic == Topic.INSURER
 
 

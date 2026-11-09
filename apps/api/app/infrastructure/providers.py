@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import math
 import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.bootstrap.config import Settings, get_settings
 
@@ -81,33 +82,52 @@ class DeterministicOcrProvider(OcrProvider):
 
 class PaddleOcrProvider(OcrProvider):
     def __init__(self):
+        self._ocr: Any | None = None
+
+    def _engine(self) -> Any:
+        if self._ocr is not None:
+            return self._ocr
+
         from paddleocr import PaddleOCR
 
-        self.ocr = PaddleOCR(
-            use_doc_orientation_classify=True,
-            use_doc_unwarping=True,
-            use_textline_orientation=True,
+        self._ocr = PaddleOCR(
+            use_angle_cls=True,
             lang="pt",
+            show_log=False,
         )
+        return self._ocr
 
     def extract(self, content: bytes, filename: str) -> OcrResult:
-        suffix = Path(filename).suffix or ".bin"
+        suffix = Path(filename).suffix.casefold() or ".bin"
+        if suffix in {".txt", ".md", ".csv"}:
+            text = content.decode("utf-8", errors="replace").strip()
+            return OcrResult(text, {}, {"document": 1.0 if text else 0.0})
+
+        if suffix == ".pdf":
+            from pypdf import PdfReader
+
+            pages = [page.extract_text() or "" for page in PdfReader(io.BytesIO(content)).pages]
+            text = "\f".join(page.strip() for page in pages).strip()
+            if text:
+                return OcrResult(text, {}, {"document": 0.95})
+
         with tempfile.NamedTemporaryFile(suffix=suffix) as file:
             file.write(content)
             file.flush()
-            result = self.ocr.predict(file.name)
-        lines = []
-        for page in result:
-            payload = getattr(page, "json", page)
-            if callable(payload):
-                payload = payload()
-            values = (
-                payload.get("res", payload).get("rec_texts", [])
-                if isinstance(payload, dict)
-                else []
-            )
-            lines.extend(str(value) for value in values)
-        return OcrResult("\n".join(lines), {}, {"document": 0.8 if lines else 0.0})
+            result = self._engine().ocr(file.name, cls=True)
+        lines: list[str] = []
+        scores: list[float] = []
+        for page in result or []:
+            for line in page or []:
+                if not isinstance(line, (list, tuple)) or len(line) < 2:
+                    continue
+                recognized = line[1]
+                if isinstance(recognized, (list, tuple)) and recognized:
+                    lines.append(str(recognized[0]))
+                    if len(recognized) > 1:
+                        scores.append(float(recognized[1]))
+        confidence = sum(scores) / len(scores) if scores else (0.8 if lines else 0.0)
+        return OcrResult("\n".join(lines), {}, {"document": confidence})
 
 
 class LocalObjectStorage(ObjectStorageProvider):

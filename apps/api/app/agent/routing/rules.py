@@ -87,6 +87,24 @@ class PatientRule:
         return None
 
 
+class OperationalHoursRule:
+    def evaluate(self, message: str) -> RouteDecision | None:
+        text = normalize(message)
+        institutional_hours = (
+            "horario de abertura",
+            "horario de funcionamento",
+            "horario de atendimento da clinica",
+            "que horas abre",
+            "que horas fecha",
+            "clinica abre",
+            "clinica fecha",
+            "ate que horas a clinica",
+        )
+        if any(term in text for term in institutional_hours):
+            return decision(Domain.KNOWLEDGE, Action.SEARCH, Topic.INSTITUTIONAL)
+        return None
+
+
 class SchedulingRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         text = normalize(message)
@@ -170,6 +188,7 @@ class RuleChain:
             SafetyRule(),
             ConversationRule(),
             PatientRule(),
+            OperationalHoursRule(),
             SchedulingRule(),
             DirectoryRule(),
             KnowledgeRule(),

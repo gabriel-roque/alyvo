@@ -4878,7 +4878,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentView"
+                  "$ref": "#/components/schemas/KnowledgeUploadBatch"
                 }
               }
             }
@@ -5893,20 +5893,18 @@
       },
       "Body_upload_api_v1_backoffice_knowledge_uploads_post": {
         "properties": {
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "file": {
-            "type": "string",
-            "contentMediaType": "application/octet-stream",
-            "title": "File"
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
           }
         },
         "type": "object",
         "required": [
-          "title",
-          "file"
+          "files"
         ],
         "title": "Body_upload_api_v1_backoffice_knowledge_uploads_post"
       },
@@ -6560,6 +6558,10 @@
             "type": "string",
             "title": "Filename"
           },
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
           "sync_status": {
             "type": "string",
             "title": "Sync Status"
@@ -6575,6 +6577,7 @@
           "entities",
           "preview",
           "filename",
+          "error",
           "sync_status"
         ],
         "title": "DocumentView"
@@ -6751,6 +6754,28 @@
           "confidence"
         ],
         "title": "KnowledgeResult"
+      },
+      "KnowledgeUploadBatch": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentView"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "KnowledgeUploadBatch"
       },
       "LivenessResponse": {
         "properties": {

@@ -1,9 +1,18 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+from app.modules.knowledge.application import ProcessKnowledgeDocument
+from app.modules.knowledge.application import jobs as knowledge_jobs
 from app.modules.scheduling.domain import CancellationPolicy
 from app.shared.infrastructure.database import SessionLocal
-from app.shared.infrastructure.models import AuditEvent, OutboxEvent
-from sqlalchemy import select
+from app.shared.infrastructure.models import (
+    AuditEvent,
+    DocumentStatus,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    OutboxEvent,
+)
+from sqlalchemy import func, select
 
 
 def test_cancellation_policy_uses_utc_and_staff_override():
@@ -34,6 +43,71 @@ def test_knowledge_publication_writes_audit_and_outbox_atomically(client, admin_
         audit = session.scalar(select(AuditEvent).where(AuditEvent.resource_id == document_id))
         assert event is not None
         assert audit is not None
+
+
+def test_multiple_knowledge_uploads_are_processed_with_embeddings(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    response = client.post(
+        "/api/v1/backoffice/knowledge/uploads",
+        headers=headers,
+        files=[
+            (
+                "files",
+                (
+                    "horarios.txt",
+                    b"A clinica abre de segunda a sexta, das 8h as 18h.",
+                    "text/plain",
+                ),
+            ),
+            (
+                "files",
+                ("retornos.md", b"# Retornos\nO retorno ocorre em ate 30 dias.", "text/markdown"),
+            ),
+        ],
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["total"] == 2
+
+    for document in payload["items"]:
+        result = ProcessKnowledgeDocument().execute(document["id"])
+        assert result["status"] == "review_required"
+        repeated = ProcessKnowledgeDocument().execute(document["id"])
+        assert repeated["idempotent"] is True
+
+    document_ids = [document["id"] for document in payload["items"]]
+    with SessionLocal() as session:
+        chunks = session.scalar(
+            select(func.count(KnowledgeChunk.id)).where(
+                KnowledgeChunk.document_id.in_(document_ids),
+                KnowledgeChunk.embedding != [],
+            )
+        )
+        assert chunks == 2
+
+
+def test_knowledge_processing_persists_failure_reason(client, admin_token, monkeypatch):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    response = client.post(
+        "/api/v1/backoffice/knowledge/uploads",
+        headers=headers,
+        files=[("files", ("ilegivel.png", b"not-an-image", "image/png"))],
+    )
+    document_id = response.json()["items"][0]["id"]
+
+    class BrokenOcr:
+        def extract(self, content, filename):
+            raise RuntimeError("OCR indisponivel")
+
+    monkeypatch.setattr(knowledge_jobs, "ocr_provider", lambda: BrokenOcr())
+    with pytest.raises(RuntimeError, match="OCR indisponivel"):
+        ProcessKnowledgeDocument().execute(document_id)
+
+    with SessionLocal() as session:
+        document = session.get(KnowledgeDocument, document_id)
+        assert document is not None
+        assert document.status == DocumentStatus.failed
+        assert document.error == "RuntimeError: OCR indisponivel"
 
 
 def test_confirmation_is_idempotent(client, patient_token):

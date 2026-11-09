@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy import select
 
 from app.bootstrap.config import get_settings
@@ -17,6 +19,15 @@ from app.shared.infrastructure.models import (
 from app.shared.infrastructure.uow import uow_factory
 
 
+@dataclass(frozen=True)
+class KnowledgeUpload:
+    id: str
+    title: str
+    filename: str
+    content_type: str
+    storage_key: str
+
+
 class KnowledgeService:
     def __init__(self, factory=uow_factory):
         self._factory = factory
@@ -31,36 +42,38 @@ class KnowledgeService:
             self._audit(uow.session, actor_id, "knowledge.created", item.id)
             return self._view(item)
 
-    def create_upload(
-        self, title: str, filename: str, content_type: str, storage_key: str, actor_id: str
-    ) -> dict:
+    def create_uploads(self, uploads: list[KnowledgeUpload], actor_id: str) -> list[dict]:
         with self._factory() as uow:
-            item = KnowledgeDocument(
-                title=title,
-                filename=filename,
-                storage_key=storage_key,
-                content_type=content_type,
-                status=DocumentStatus.processing,
-            )
-            uow.session.add(item)
-            uow.flush()
-            self._audit(uow.session, actor_id, "knowledge.uploaded", item.id)
-            uow.session.add(
-                OutboxEvent(
-                    aggregate_type="knowledge_document",
-                    aggregate_id=item.id,
-                    event_type="knowledge.processing.requested",
-                    payload={"id": item.id},
+            created = []
+            for upload in uploads:
+                item = KnowledgeDocument(
+                    id=upload.id,
+                    title=upload.title,
+                    filename=upload.filename,
+                    storage_key=upload.storage_key,
+                    content_type=upload.content_type,
+                    status=DocumentStatus.processing,
                 )
-            )
-            return self._view(item)
+                uow.session.add(item)
+                uow.flush()
+                self._audit(uow.session, actor_id, "knowledge.uploaded", item.id)
+                uow.session.add(
+                    OutboxEvent(
+                        aggregate_type="knowledge_document",
+                        aggregate_id=item.id,
+                        event_type="knowledge.processing.requested",
+                        payload={"id": item.id},
+                    )
+                )
+                created.append(self._view(item))
+            return created
 
     def list_documents(self) -> dict:
         with self._factory() as uow:
             rows = uow.session.scalars(
                 select(KnowledgeDocument).order_by(KnowledgeDocument.created_at.desc())
             ).all()
-            items = [self._view(item) for item in rows]
+            items = [self._view(item, self._sync_status(uow.session, item)) for item in rows]
             return {"items": items, "total": len(items), "page": 1, "page_size": len(items)}
 
     def publish(self, document_id: str, entities: list[dict], actor_id: str) -> dict:
@@ -68,7 +81,7 @@ class KnowledgeService:
             item = uow.session.get(KnowledgeDocument, document_id)
             if not item:
                 raise NotFoundError("Documento não encontrado")
-            if item.status not in {DocumentStatus.review_required, DocumentStatus.processing}:
+            if item.status != DocumentStatus.review_required:
                 raise ValidationError("Documento não pode ser publicado neste estado")
             item.status, item.entities = DocumentStatus.published, entities
             chunks = uow.session.scalars(
@@ -93,7 +106,7 @@ class KnowledgeService:
                 )
             )
             self._audit(uow.session, actor_id, "knowledge.published", item.id)
-            return self._view(item)
+            return self._view(item, "pending")
 
     def reject(self, document_id: str, actor_id: str) -> dict:
         with self._factory() as uow:
@@ -175,7 +188,7 @@ class KnowledgeService:
         return {token for token in normalized.split() if len(token) >= 3 and token not in stop}
 
     @staticmethod
-    def _view(item: KnowledgeDocument) -> dict:
+    def _view(item: KnowledgeDocument, sync_status: str = "not_applicable") -> dict:
         return {
             "id": item.id,
             "title": item.title,
@@ -184,10 +197,24 @@ class KnowledgeService:
             "entities": item.entities,
             "preview": item.content[:800],
             "filename": item.filename,
-            "sync_status": "pending"
-            if item.status == DocumentStatus.published
-            else "not_applicable",
+            "error": item.error,
+            "sync_status": sync_status,
         }
+
+    @staticmethod
+    def _sync_status(session, item: KnowledgeDocument) -> str:
+        if item.status != DocumentStatus.published:
+            return "not_applicable"
+        event = session.scalar(
+            select(OutboxEvent)
+            .where(
+                OutboxEvent.aggregate_id == item.id,
+                OutboxEvent.event_type == "knowledge.published",
+            )
+            .order_by(OutboxEvent.created_at.desc())
+            .limit(1)
+        )
+        return "synced" if event and event.processed_at else "pending"
 
     @staticmethod
     def _chunk_view(item: KnowledgeChunk) -> dict:

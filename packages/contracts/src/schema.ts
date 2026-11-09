@@ -1034,10 +1034,8 @@ export interface components {
         };
         /** Body_upload_api_v1_backoffice_knowledge_uploads_post */
         Body_upload_api_v1_backoffice_knowledge_uploads_post: {
-            /** Title */
-            title: string;
-            /** File */
-            file: string;
+            /** Files */
+            files: string[];
         };
         /** CancelAppointmentArguments */
         CancelAppointmentArguments: {
@@ -1287,6 +1285,8 @@ export interface components {
             preview: string;
             /** Filename */
             filename: string;
+            /** Error */
+            error: string;
             /** Sync Status */
             sync_status: string;
         };
@@ -1356,6 +1356,13 @@ export interface components {
             }[];
             /** Confidence */
             confidence: number;
+        };
+        /** KnowledgeUploadBatch */
+        KnowledgeUploadBatch: {
+            /** Items */
+            items: components["schemas"]["DocumentView"][];
+            /** Total */
+            total: number;
         };
         /** LivenessResponse */
         LivenessResponse: {
@@ -5406,7 +5413,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentView"];
+                    "application/json": components["schemas"]["KnowledgeUploadBatch"];
                 };
             };
             /** @description Autenticação necessária */

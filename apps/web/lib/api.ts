@@ -285,15 +285,13 @@ export async function listKnowledgeDocuments() {
   return unwrap(await staffClient.GET("/api/v1/backoffice/knowledge/documents"), "Falha ao carregar conhecimento");
 }
 
-export async function uploadKnowledge(file: File) {
+export async function uploadKnowledge(files: File[]) {
   const form = new FormData();
-  const title = file.name.replace(/\.[^.]+$/, "");
-  form.append("title", title);
-  form.append("file", file);
+  for (const file of files) form.append("files", file);
   return unwrap(await staffClient.POST("/api/v1/backoffice/knowledge/uploads", {
-    body: { title, file: file.name },
+    body: { files: files.map((file) => file.name) },
     bodySerializer: () => form,
-  }), "Falha no upload");
+  }), "Falha no upload dos documentos");
 }
 
 export async function publishKnowledge(id: string, entities: components["schemas"]["PublishDocument"]["entities"] = []) {
