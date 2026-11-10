@@ -87,12 +87,12 @@ class SchedulingService:
                 reason=reason,
             )
             uow.session.add(item)
-            self._history(uow.session, item, actor.id, None, AppointmentStatus.confirmed)
-            self._audit(uow.session, actor.id, "appointment.created", item.id)
             try:
                 uow.flush()
             except IntegrityError as exc:
                 raise ConflictError("Horário já reservado", code="appointment_conflict") from exc
+            self._history(uow.session, item, actor.id, None, AppointmentStatus.confirmed)
+            self._audit(uow.session, actor.id, "appointment.created", item.id)
             return self._appointment_view(uow.session, item)
 
     def cancel(self, actor: Actor, appointment_id: str, staff_override: bool = False) -> dict:

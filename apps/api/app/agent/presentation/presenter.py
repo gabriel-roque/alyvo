@@ -47,11 +47,11 @@ def _present_knowledge(name: str, payload: dict[str, Any]) -> dict[str, Any]:
     question = normalize(payload["query"])
     if "fim de semana" in question or "finais de semana" in question:
         answer = (
-            "Pelo horário informado pela clínica, não há atendimento regular aos finais de "
-            f"semana. {excerpt}"
+            "Nosso atendimento regular não acontece aos finais de semana. "
+            f"{excerpt} Se quiser, posso ajudar a encontrar um horário durante a semana."
         )
     else:
-        answer = f"Claro. Segundo as informações da clínica: {excerpt}"
+        answer = f"Encontrei esta orientação para você: {excerpt}"
     return response(
         answer,
         name,
@@ -80,7 +80,7 @@ def _present_availability(name: str, payload: dict[str, Any]) -> dict[str, Any]:
     shown = len(payload["items"])
     suffix = "" if payload["total"] == shown else f" Mostrei as {shown} primeiras opções."
     return response(
-        f"Perfeito! Encontrei horários para {day}{period}.{suffix} Qual deles funciona melhor para você?",
+        f"Há horários disponíveis para {day}{period}.{suffix} Qual opção combina melhor com você?",
         name,
         tool_result=payload,
     )
@@ -143,4 +143,4 @@ def _human_date(value: date) -> str:
 
 def _period_label(period: str | None) -> str:
     labels = {"morning": " pela manhã", "afternoon": " à tarde", "evening": " à noite"}
-    return labels.get(period, "")
+    return labels.get(period, "") if period is not None else ""

@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     openrouter_max_retries: int = 1
     allow_external_providers: bool = True
     llm_routing_enabled: bool = False
+    llm_response_enabled: bool = True
+    llm_response_max_tokens: int = 260
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""
     langsmith_project: str = "alyvo"

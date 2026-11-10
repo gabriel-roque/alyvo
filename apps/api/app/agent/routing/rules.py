@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Protocol
 
-from app.agent.routing.models import Action, Domain, RiskLevel, RouteDecision, Topic
+from app.agent.routing.models import (
+    Action,
+    ConversationMarker,
+    Domain,
+    RiskLevel,
+    RouteDecision,
+    RouteSource,
+    Topic,
+)
 
 
 def normalize(value: str) -> str:
@@ -14,9 +22,49 @@ def normalize(value: str) -> str:
 
 
 def decision(
-    domain: Domain, action: Action, topic: Topic, confidence: float = 0.98, **values
+    domain: Domain,
+    action: Action,
+    topic: Topic,
+    confidence: float = 0.98,
+    **values: Any,
 ) -> RouteDecision:
     return RouteDecision(domain=domain, action=action, topic=topic, confidence=confidence, **values)
+
+
+CONVERSATION_PREFIXES = (
+    ("bom dia", ConversationMarker.GREETING),
+    ("boa tarde", ConversationMarker.GREETING),
+    ("boa noite", ConversationMarker.GREETING),
+    ("ola", ConversationMarker.GREETING),
+    ("oi", ConversationMarker.GREETING),
+    ("obrigado", ConversationMarker.THANKS),
+    ("obrigada", ConversationMarker.THANKS),
+    ("valeu", ConversationMarker.THANKS),
+    ("ate logo", ConversationMarker.FAREWELL),
+    ("ate mais", ConversationMarker.FAREWELL),
+    ("tchau", ConversationMarker.FAREWELL),
+)
+POLITE_TAILS = {"", "tudo bem", "como vai", "como voce esta"}
+
+
+def split_conversation_marker(message: str) -> tuple[ConversationMarker | None, str]:
+    text = normalize(message)
+    for prefix, marker in CONVERSATION_PREFIXES:
+        if text == prefix:
+            return marker, ""
+        if text.startswith(prefix + " "):
+            return marker, text.removeprefix(prefix).strip()
+    return None, text
+
+
+def is_conversation_only(marker: ConversationMarker | None, remainder: str) -> bool:
+    if marker is None:
+        return False
+    if remainder in POLITE_TAILS:
+        return True
+    if marker == ConversationMarker.THANKS:
+        return remainder.startswith(("pela ajuda", "pela informacao", "por ajudar", "mesmo"))
+    return False
 
 
 class RoutingRule(Protocol):
@@ -63,16 +111,20 @@ class SafetyRule:
 
 class ConversationRule:
     def evaluate(self, message: str) -> RouteDecision | None:
+        marker, remainder = split_conversation_marker(message)
+        if is_conversation_only(marker, remainder):
+            actions = {
+                ConversationMarker.GREETING: Action.GREET,
+                ConversationMarker.THANKS: Action.THANK,
+                ConversationMarker.FAREWELL: Action.FAREWELL,
+            }
+            return decision(
+                Domain.CONVERSATION,
+                actions[marker],
+                Topic.GENERAL,
+                conversation_marker=marker,
+            )
         text = normalize(message)
-        if any(
-            text == term or text.startswith(term + " ")
-            for term in ("oi", "ola", "bom dia", "boa tarde", "boa noite")
-        ):
-            return decision(Domain.CONVERSATION, Action.GREET, Topic.GENERAL)
-        if any(term in text for term in ("obrigado", "obrigada", "valeu")):
-            return decision(Domain.CONVERSATION, Action.THANK, Topic.GENERAL)
-        if any(term in text for term in ("tchau", "ate logo")):
-            return decision(Domain.CONVERSATION, Action.FAREWELL, Topic.GENERAL)
         if any(term in text for term in ("o que voce faz", "como pode ajudar", "suas funcoes")):
             return decision(Domain.CONVERSATION, Action.DESCRIBE, Topic.GENERAL)
         return None
@@ -146,16 +198,26 @@ class SchedulingRule:
 class DirectoryRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         text = normalize(message)
+        if any(
+            term in text for term in ("medico", "doutor", "profissional", "cardiolog", "pediatr")
+        ):
+            secondary = (
+                [Topic.INSURER]
+                if any(term in text for term in ("convenio", "plano de saude"))
+                else []
+            )
+            return decision(
+                Domain.DIRECTORY,
+                Action.SEARCH,
+                Topic.DOCTOR,
+                secondary_topics=secondary,
+            )
         if any(term in text for term in ("convenio", "plano de saude")):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.INSURER)
         if "especialidad" in text:
             return decision(Domain.DIRECTORY, Action.LIST, Topic.SPECIALTY)
         if any(term in text for term in ("unidade", "endereco", "onde fica")):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.UNIT)
-        if any(
-            term in text for term in ("medico", "doutor", "profissional", "cardiolog", "pediatr")
-        ):
-            return decision(Domain.DIRECTORY, Action.SEARCH, Topic.DOCTOR)
         if any(term in text for term in ("exame", "procedimento", "hemograma")):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.EXAM)
         return None
@@ -183,12 +245,13 @@ class KnowledgeRule:
 class LlmFallbackRule:
     """Boundary for a probabilistic classifier, deterministic without a provider."""
 
-    def __init__(self, classifier=None):
+    def __init__(self, classifier: Callable[[str], RouteDecision | None] | None = None):
         self.classifier = classifier
 
     def evaluate(self, message: str) -> RouteDecision | None:
         if self.classifier:
-            return self.classifier(message)
+            result = self.classifier(message)
+            return result.model_copy(update={"source": RouteSource.SEMANTIC}) if result else None
         if normalize(message):
             return decision(
                 Domain.FALLBACK,
@@ -197,6 +260,7 @@ class LlmFallbackRule:
                 0.4,
                 needs_clarification=True,
                 reason="safe deterministic fallback",
+                source=RouteSource.FALLBACK,
             )
         return decision(
             Domain.FALLBACK,
@@ -204,6 +268,7 @@ class LlmFallbackRule:
             Topic.UNKNOWN,
             0.3,
             needs_clarification=True,
+            source=RouteSource.FALLBACK,
         )
 
 
@@ -225,10 +290,60 @@ class RuleChain:
         )
 
     def classify(self, message: str) -> RouteDecision:
-        for rule in self.rules:
-            match = rule.evaluate(message)
-            if match:
-                return match
-        return decision(
-            Domain.FALLBACK, Action.CLARIFY, Topic.UNKNOWN, 0.3, needs_clarification=True
+        marker, remainder = split_conversation_marker(message)
+        content = (
+            remainder
+            if marker is not None and not is_conversation_only(marker, remainder)
+            else message
         )
+        if _is_simple_negated_action(content):
+            return decision(
+                Domain.FALLBACK,
+                Action.CLARIFY,
+                Topic.UNKNOWN,
+                0.9,
+                needs_clarification=True,
+                reason="negated operation",
+                conversation_marker=marker,
+                source=RouteSource.RULE,
+            )
+
+        matches: list[RouteDecision] = []
+        fallback: RouteDecision | None = None
+        for rule in self.rules:
+            if isinstance(rule, LlmFallbackRule) and matches:
+                break
+            match = rule.evaluate(content)
+            if match is None:
+                continue
+            match = match.model_copy(
+                update={"conversation_marker": marker or match.conversation_marker}
+            )
+            if match.domain in {Domain.SECURITY, Domain.CLINICAL_SAFETY}:
+                return match
+            if match.domain == Domain.FALLBACK:
+                fallback = match
+                continue
+            matches.append(match)
+        if matches:
+            selected = matches[0]
+            secondary = list(
+                dict.fromkeys([*selected.secondary_topics, *(item.topic for item in matches[1:])])
+            )
+            return selected.model_copy(update={"secondary_topics": secondary})
+        return fallback or decision(
+            Domain.FALLBACK,
+            Action.CLARIFY,
+            Topic.UNKNOWN,
+            0.3,
+            needs_clarification=True,
+            conversation_marker=marker,
+            source=RouteSource.FALLBACK,
+        )
+
+
+def _is_simple_negated_action(message: str) -> bool:
+    text = normalize(message)
+    starts_negated = text.startswith(("nao quero ", "nao preciso "))
+    actions = ("agendar", "marcar", "cancelar", "desmarcar")
+    return starts_negated and any(action in text for action in actions) and text.count("quero") <= 1

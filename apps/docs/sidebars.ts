@@ -35,6 +35,8 @@ const sidebars: SidebarsConfig = {
         'decisions/scalar-api-reference',
         'decisions/docusaurus-documentation-portal',
         'decisions/documentation-scope',
+        'decisions/hybrid-agent-routing',
+        'decisions/grounded-llm-response-composition',
         'decisions/template',
       ],
     },

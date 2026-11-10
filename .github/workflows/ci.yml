@@ -23,8 +23,16 @@ jobs:
       - run: uv run ruff format --check apps/api apps/worker scripts tests
       - run: uv run mypy --no-incremental apps/api/app apps/worker/worker
       - run: uv run lint-imports
+      - name: Architecture and quality regression gates
+        run: >-
+          uv run pytest -q
+          apps/api/tests/contract
+          apps/api/tests/test_agent_quality_gates.py
+          apps/api/tests/test_agent_evaluations.py
       - run: uv run pytest --cov --cov-fail-under=80
         env: { APP_ENV: test, LLM_PRIMARY_PROVIDER: mock, LLM_FALLBACK_PROVIDER: mock, EMBEDDING_PROVIDER: mock }
+      - name: Domain and application coverage gate
+        run: uv run coverage report --include='apps/api/app/modules/*' --fail-under=85
       - run: uv run python packages/contracts/generate.py
         env: { APP_ENV: test, API_DOCS_ENABLED: "true", LLM_PRIMARY_PROVIDER: mock, LLM_FALLBACK_PROVIDER: mock, EMBEDDING_PROVIDER: mock }
       - run: npm run generate:contracts

@@ -1,86 +1,152 @@
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
+from typing import Any, TypedDict
 from zoneinfo import ZoneInfo
 
 from langgraph.graph import END, START, StateGraph
 
-from app.agent.orchestration.dates import parse_availability_request
-from app.agent.presentation import present_tool_result, response
-from app.agent.routing import Action, Domain, RiskLevel, RouteDecision, RuleChain, Topic
+from app.agent.conversation import ConversationContext, ConversationTurn
+from app.agent.planning import DecisionPolicy, ExecutionPlan
+from app.agent.presentation import (
+    CompositionRequest,
+    ResponseComposer,
+    present_tool_result,
+    response,
+)
+from app.agent.routing import ConversationMarker, Domain, RouteDecision, RuleChain
+from app.agent.routing.context import resolve_from_context
 from app.agent.routing.rules import normalize
-from app.agent.tools import ToolRegistry, build_tool_registry
+from app.agent.tools import ToolGate, ToolInvocationPolicy, ToolRegistry, build_tool_registry
 from app.agent.tools.models import ToolResult
 from app.bootstrap.config import get_settings
 from app.modules.identity.domain import Actor
+from app.shared.infrastructure.observability import record
 
 
 class AgentState(TypedDict, total=False):
     message: str
     normalized_message: str
     actor: Actor | None
+    context: ConversationContext
+    history: tuple[ConversationTurn, ...]
     route: RouteDecision
+    plan: ExecutionPlan
     tool_name: str
-    tool_arguments: dict
+    tool_arguments: dict[str, object]
     tool_result: ToolResult
-    result: dict
+    result: dict[str, object]
+
+
+@dataclass(frozen=True)
+class AgentOutcome:
+    response: dict[str, object]
+    context: ConversationContext
+    route: RouteDecision
+    plan: ExecutionPlan
 
 
 class AgentOrchestrator:
-    def __init__(self, rules: RuleChain | None = None, tools: ToolRegistry | None = None):
+    def __init__(
+        self,
+        rules: RuleChain | None = None,
+        tools: ToolRegistry | None = None,
+        policy: DecisionPolicy | None = None,
+        composer: ResponseComposer | None = None,
+    ):
         if rules is None:
-            from app.infrastructure.providers import routing_classifier
+            from app.infrastructure.llm import routing_classifier
 
             rules = RuleChain(fallback_classifier=routing_classifier())
         self.rules = rules
         self.tools = tools or build_tool_registry()
+        self.policy = policy or DecisionPolicy()
+        if composer is None:
+            from app.infrastructure.llm import response_composer
+
+            composer = response_composer()
+        self.composer = composer
+        self.tool_policy = ToolInvocationPolicy()
         self.graph = self._build_graph()
 
-    def run(self, message: str, actor: Actor | None = None) -> dict:
-        output = self.graph.invoke({"message": message, "actor": actor})
-        return output["result"]
+    def run(
+        self,
+        message: str,
+        actor: Actor | None = None,
+        context: ConversationContext | None = None,
+        history: tuple[ConversationTurn, ...] = (),
+    ) -> dict[str, object]:
+        return self.run_with_context(message, actor, context, history).response
+
+    def run_with_context(
+        self,
+        message: str,
+        actor: Actor | None = None,
+        context: ConversationContext | None = None,
+        history: tuple[ConversationTurn, ...] = (),
+    ) -> AgentOutcome:
+        started = time.perf_counter()
+        initial_context = (context or ConversationContext()).next_turn()
+        output = self.graph.invoke(
+            {
+                "message": message,
+                "actor": actor,
+                "context": initial_context,
+                "history": history[-6:],
+            }
+        )
+        outcome = AgentOutcome(
+            response=output["result"],
+            context=output["context"],
+            route=output["route"],
+            plan=output["plan"],
+        )
+        record(
+            "agent.decision",
+            route_source=outcome.route.source,
+            domain=outcome.route.domain,
+            action=outcome.route.action,
+            topic=outcome.route.topic,
+            confidence=outcome.route.confidence,
+            plan_kind=outcome.plan.kind,
+            tools=[step.tool_name for step in outcome.plan.steps],
+            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
+        return outcome
 
     @staticmethod
-    def _normalize(state: AgentState) -> dict:
-        from app.agent.routing.rules import normalize
-
+    def _normalize(state: AgentState) -> dict[str, object]:
         return {"normalized_message": normalize(state["message"])}
 
-    def _classify(self, state: AgentState) -> dict:
-        return {"route": self.rules.classify(state["normalized_message"])}
+    def _classify(self, state: AgentState) -> dict[str, object]:
+        route = self.rules.classify(state["message"])
+        route = resolve_from_context(route, state["message"], state["context"])
+        return {"route": route}
 
-    def _plan(self, state: AgentState) -> dict:
-        route = state["route"]
-        immediate = self._immediate(route, state["message"])
-        if immediate:
-            return {"result": immediate}
-        if route.topic == Topic.AVAILABILITY:
-            arguments = self._availability_arguments(state["message"])
-            if arguments is None:
-                return {
-                    "result": response(
-                        "Claro! Para qual dia você gostaria de consultar os horários?",
-                        "clarify_availability",
-                        suggestions=[
-                            {"label": "Amanhã", "message": "Quero horários para amanhã"},
-                            {
-                                "label": "Próxima sexta-feira",
-                                "message": "Quero horários na próxima sexta-feira",
-                            },
-                        ],
-                    )
-                }
-            return {"tool_name": "search_availability", "tool_arguments": arguments}
-        name, arguments = self._tool_call(route, state["message"])
-        return {"tool_name": name, "tool_arguments": arguments}
+    def _plan(self, state: AgentState) -> dict[str, object]:
+        settings = get_settings()
+        today = datetime.now(ZoneInfo(settings.clinic_timezone)).date()
+        plan = self.policy.plan(state["route"], state["message"], state["context"], today)
+        update: dict[str, object] = {"plan": plan, "context": plan.context}
+        if plan.response is not None:
+            update["result"] = plan.response
+            return update
+        step = plan.first_step
+        if step is None:
+            raise RuntimeError("Plano executável sem etapa")
+        update["tool_name"] = step.tool_name
+        update["tool_arguments"] = step.arguments
+        return update
 
-    def _execute(self, state: AgentState) -> dict:
+    def _execute(self, state: AgentState) -> dict[str, object]:
         if state.get("result"):
             return {}
         spec = self.tools.get(state["tool_name"])
         actor = state.get("actor")
-        if spec.requires_authentication and actor is None:
+        gate = self.tool_policy.evaluate(spec, actor)
+        if gate == ToolGate.AUTHENTICATE:
             return {
                 "result": response(
                     "Confirme sua identidade para continuar.",
@@ -89,23 +155,47 @@ class AgentOrchestrator:
                     pending_tool={"name": spec.name, "arguments": state["tool_arguments"]},
                 )
             }
+        if gate == ToolGate.CONFIRM:
+            return {
+                "result": response(
+                    "Revise os dados antes de concluir esta operação.",
+                    spec.name,
+                    pending_tool={"name": spec.name, "arguments": state["tool_arguments"]},
+                )
+            }
         arguments = spec.handler.arguments_model.model_validate(state["tool_arguments"])
         return {"tool_result": spec.handler.execute(arguments, actor)}
 
     @staticmethod
-    def _validate(state: AgentState) -> dict:
+    def _validate(state: AgentState) -> dict[str, object]:
         if state.get("result"):
             return {}
         state["tool_result"].model_dump(mode="json")
         return {}
 
-    @staticmethod
-    def _present_node(state: AgentState) -> dict:
-        if state.get("result"):
-            return {}
-        return {"result": present_tool_result(state["tool_name"], state["tool_result"])}
+    def _present_node(self, state: AgentState) -> dict[str, object]:
+        draft = state.get("result")
+        tool_result = state.get("tool_result")
+        if draft is None:
+            if tool_result is None:
+                raise RuntimeError("Apresentação sem resposta ou resultado de ferramenta")
+            draft = present_tool_result(state["tool_name"], tool_result)
+        draft = _apply_conversation_marker(draft, state["route"], state["message"])
+        result = self.composer.compose(
+            CompositionRequest(
+                message=state["message"],
+                history=state.get("history", ()),
+                domain=state["route"].domain,
+                action=state["route"].action,
+                topic=state["route"].topic,
+                plan_kind=state["plan"].kind,
+                draft=draft,
+                tool_result=tool_result.model_dump(mode="json") if tool_result else None,
+            )
+        )
+        return {"result": result}
 
-    def _build_graph(self):
+    def _build_graph(self) -> Any:
         graph = StateGraph(AgentState)
         graph.add_node("normalize", self._normalize)
         graph.add_node("classify", self._classify)
@@ -122,79 +212,49 @@ class AgentOrchestrator:
         graph.add_edge("present", END)
         return graph.compile()
 
-    @staticmethod
-    def _immediate(route: RouteDecision, message: str) -> dict | None:
-        if route.domain == Domain.CLINICAL_SAFETY:
-            if route.risk == RiskLevel.URGENT:
-                return response(
-                    "Sinto muito que você esteja passando por isso. Esses sinais podem precisar de atendimento imediato. Procure um pronto atendimento ou ligue para o serviço de emergência da sua região.",
-                    "clinical_safety",
-                    confidence=1,
-                )
-            return response(
-                "Sinto muito que você não esteja bem. Para sua segurança, não consigo indicar uma especialidade apenas pelos sintomas. O ideal é conversar com um profissional de saúde; se a dor for súbita, muito intensa ou vier com outros sinais preocupantes, procure atendimento de urgência.",
-                "clinical_safety",
-                confidence=1,
-            )
-        if route.domain == Domain.SECURITY:
-            return response(
-                "Não posso revelar dados de outra pessoa ou ignorar regras de segurança.",
-                "security",
-            )
-        if route.domain == Domain.FALLBACK:
-            return response(
-                "Quero entender direitinho para ajudar. Você procura informações da clínica, um médico ou um horário para consulta?",
-                "clarify",
-                suggestions=[
-                    {"label": "Informações da clínica", "message": "Quero informações da clínica"},
-                    {"label": "Encontrar um médico", "message": "Quero encontrar um médico"},
-                    {"label": "Ver horários", "message": "Quero ver horários disponíveis"},
-                ],
-            )
-        greeting = AgentOrchestrator._greeting(message)
-        messages = {
-            Action.GREET: greeting,
-            Action.THANK: "Imagina! Se precisar de mais alguma coisa, estou por aqui.",
-            Action.FAREWELL: "Até logo! Espero ter ajudado. Cuide-se!",
-            Action.DESCRIBE: "Posso ajudar a encontrar médicos, consultar convênios, exames e unidades, verificar horários e acompanhar suas consultas. Por onde você prefere começar?",
+    def present_result(self, tool_name: str, result: ToolResult) -> dict[str, object]:
+        draft = present_tool_result(tool_name, result)
+        scheduling = tool_name in {
+            "search_availability",
+            "list_my_appointments",
+            "create_appointment",
+            "cancel_appointment",
         }
-        return (
-            response(messages[route.action], "conversation") if route.action in messages else None
+        return self.composer.compose(
+            CompositionRequest(
+                message="Apresente de forma natural o resultado solicitado pelo paciente.",
+                history=(),
+                domain="scheduling" if scheduling else "directory",
+                action="execute",
+                topic=tool_name,
+                plan_kind="tool",
+                draft=draft,
+                tool_result=result.model_dump(mode="json"),
+            )
         )
 
-    @staticmethod
-    def _tool_call(route: RouteDecision, message: str) -> tuple[str, dict]:
-        if route.topic == Topic.INSURER:
-            return "list_insurers", {}
-        if route.topic == Topic.SPECIALTY:
-            return "list_specialties", {}
-        if route.topic == Topic.UNIT:
-            return "list_units", {}
-        if route.topic == Topic.EXAM:
-            return "list_exams", {}
-        if route.topic == Topic.DOCTOR:
-            return "search_directory", {"query": message}
-        if route.topic == Topic.OWN_APPOINTMENT:
-            return "list_my_appointments", {}
-        return "search_knowledge", {"query": message}
 
-    @staticmethod
-    def _availability_arguments(message: str) -> dict | None:
-        settings = get_settings()
-        today = datetime.now(ZoneInfo(settings.clinic_timezone)).date()
-        return parse_availability_request(message, today)
+def _apply_conversation_marker(
+    result: dict[str, object], route: RouteDecision, message: str
+) -> dict[str, object]:
+    marker = route.conversation_marker
+    if marker is None or route.domain == Domain.CONVERSATION:
+        return result
+    prefixes = {
+        ConversationMarker.GREETING: _greeting_prefix(message),
+        ConversationMarker.THANKS: "Por nada! ",
+        ConversationMarker.FAREWELL: "Claro, antes de você ir: ",
+    }
+    answer = str(result["answer"])
+    return {**result, "answer": prefixes[marker] + answer}
 
-    @staticmethod
-    def _greeting(message: str) -> str:
-        text = normalize(message)
-        if "bom dia" in text:
-            return "Bom dia! Que bom ter você por aqui. Como posso ajudar?"
-        if "boa tarde" in text:
-            return "Boa tarde! Como posso ajudar você?"
-        if "boa noite" in text:
-            return "Boa noite! Como posso ajudar você?"
-        return "Oi! Tudo bem? Como posso ajudar você hoje?"
 
-    @staticmethod
-    def _present(tool_name: str, result: ToolResult) -> dict:
-        return present_tool_result(tool_name, result)
+def _greeting_prefix(message: str) -> str:
+    text = normalize(message)
+    if "bom dia" in text:
+        return "Bom dia! "
+    if "boa tarde" in text:
+        return "Boa tarde! "
+    if "boa noite" in text:
+        return "Boa noite! "
+    return "Oi! "

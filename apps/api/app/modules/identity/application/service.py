@@ -84,7 +84,8 @@ class IdentityService:
                 select(RefreshToken).where(RefreshToken.token_hash == hash_value(raw_token))
             )
             now = datetime.now(timezone.utc)
-            if not stored or stored.revoked_at or stored.expires_at <= now:
+            expires_at = _as_utc(stored.expires_at) if stored else None
+            if not stored or stored.revoked_at or expires_at is None or expires_at <= now:
                 raise AuthenticationRequiredError("Refresh token revogado")
             user = uow.session.get(User, stored.user_id)
             if not user:
@@ -124,3 +125,11 @@ def cpf_lookup_from_encrypted(value: str) -> str:
     from app.modules.identity.infrastructure.security import unprotect_cpf
 
     return cpf_lookup(unprotect_cpf(value))
+
+
+def _as_utc(value: datetime) -> datetime:
+    return (
+        value.replace(tzinfo=timezone.utc)
+        if value.tzinfo is None
+        else value.astimezone(timezone.utc)
+    )

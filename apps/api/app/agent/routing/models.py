@@ -48,6 +48,19 @@ class RiskLevel(StrEnum):
     URGENT = "urgent"
 
 
+class ConversationMarker(StrEnum):
+    GREETING = "greeting"
+    THANKS = "thanks"
+    FAREWELL = "farewell"
+
+
+class RouteSource(StrEnum):
+    RULE = "rule"
+    CONTEXT = "context"
+    SEMANTIC = "semantic"
+    FALLBACK = "fallback"
+
+
 class RouteDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -58,3 +71,6 @@ class RouteDecision(BaseModel):
     risk: RiskLevel = RiskLevel.NORMAL
     needs_clarification: bool = False
     reason: str | None = None
+    conversation_marker: ConversationMarker | None = None
+    secondary_topics: list[Topic] = Field(default_factory=list)
+    source: RouteSource = RouteSource.RULE

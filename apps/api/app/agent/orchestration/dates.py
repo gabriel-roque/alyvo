@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
+from app.agent.conversation import AvailabilitySlots
 from app.agent.routing.rules import normalize
 
 WEEKDAYS = {
@@ -17,17 +18,19 @@ WEEKDAYS = {
 
 
 def parse_availability_request(message: str, today: date) -> dict[str, str | None] | None:
+    slots = extract_availability_slots(message, today)
+    if slots.from_date is None:
+        return None
+    return slots.tool_arguments()
+
+
+def extract_availability_slots(message: str, today: date) -> AvailabilitySlots:
     text = normalize(message)
     requested = _explicit_date(message, today) or _relative_date(text, today)
     if requested is None:
-        return None
-
+        return AvailabilitySlots(period=_period(text))
     start, end = requested
-    return {
-        "from_date": start.isoformat(),
-        "to_date": end.isoformat(),
-        "period": _period(text),
-    }
+    return AvailabilitySlots(from_date=start, to_date=end, period=_period(text))
 
 
 def _explicit_date(message: str, today: date) -> tuple[date, date] | None:

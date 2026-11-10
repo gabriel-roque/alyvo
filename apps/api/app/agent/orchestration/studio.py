@@ -77,6 +77,9 @@ def studio_registry() -> ToolRegistry:
             handler=SyntheticHandler(spec.name, spec.handler.arguments_model),
             requires_authentication=spec.requires_authentication,
             requires_confirmation=spec.requires_confirmation,
+            idempotent=spec.idempotent,
+            timeout_seconds=spec.timeout_seconds,
+            audit=spec.audit,
         )
         for spec in build_tool_registry().specs()
     )

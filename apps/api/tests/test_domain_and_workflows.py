@@ -131,6 +131,105 @@ def test_confirmation_is_idempotent(client, patient_token):
     assert confirmation["id"]
 
 
+def test_conversation_context_is_persisted_between_messages(client):
+    session_id = client.post("/api/v1/chat/sessions").json()["id"]
+    first = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"content": "Quero ver horários disponíveis"},
+    )
+    second = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"content": "Na próxima sexta-feira"},
+    )
+    third = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"content": "E à tarde?"},
+    )
+
+    assert first.json()["intent"] == "clarify_availability"
+    assert second.json()["intent"] == "search_availability"
+    assert third.json()["intent"] == "search_availability"
+    assert third.json()["tool_result"]["period"] == "afternoon"
+
+
+def test_conversation_tool_policy_paths(client, patient_token):
+    session_id = client.post("/api/v1/chat/sessions").json()["id"]
+    invalid = client.post(
+        f"/api/v1/chat/sessions/{session_id}/actions",
+        json={"tool": "unknown_tool", "arguments": {}},
+    )
+    assert invalid.status_code == 422
+
+    direct = client.post(
+        f"/api/v1/chat/sessions/{session_id}/actions",
+        json={"tool": "list_insurers", "arguments": {}},
+    )
+    assert direct.status_code == 200
+    assert direct.json()["tool_result"]["type"] == "insurers"
+
+    pending = client.post(
+        f"/api/v1/chat/sessions/{session_id}/actions",
+        json={"tool": "list_my_appointments", "arguments": {}},
+    )
+    assert pending.status_code == 200
+    assert pending.json()["auth_required"] is True
+
+    headers = {"Authorization": f"Bearer {patient_token}"}
+    resumed = client.post(f"/api/v1/chat/sessions/{session_id}/resume", headers=headers)
+    assert resumed.status_code == 200
+    assert resumed.json()["tool_result"]["type"] == "appointments"
+
+    no_pending_session = client.post("/api/v1/chat/sessions", headers=headers).json()["id"]
+    assert (
+        client.post(
+            f"/api/v1/chat/sessions/{no_pending_session}/resume", headers=headers
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            f"/api/v1/chat/sessions/{session_id}/confirmations/missing",
+            headers=headers,
+            json={"accepted": True},
+        ).status_code
+        == 404
+    )
+
+
+def test_confirmation_can_be_rejected_only_once(client, patient_token):
+    headers = {"Authorization": f"Bearer {patient_token}"}
+    session_id = client.post("/api/v1/chat/sessions", headers=headers).json()["id"]
+    doctor = client.get("/api/v1/directory/doctors").json()["items"][0]
+    prepared = client.post(
+        f"/api/v1/chat/sessions/{session_id}/actions",
+        headers=headers,
+        json={
+            "tool": "create_appointment",
+            "arguments": {
+                "doctor_id": doctor["id"],
+                "starts_at": (datetime.now(timezone.utc) + timedelta(days=60)).isoformat(),
+                "reason": "Operação rejeitada",
+            },
+        },
+    )
+    confirmation_id = prepared.json()["confirmation_request"]["id"]
+    rejected = client.post(
+        f"/api/v1/chat/sessions/{session_id}/confirmations/{confirmation_id}",
+        headers=headers,
+        json={"accepted": False},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["answer"] == "Operação cancelada."
+    assert (
+        client.post(
+            f"/api/v1/chat/sessions/{session_id}/confirmations/{confirmation_id}",
+            headers=headers,
+            json={"accepted": False},
+        ).status_code
+        == 409
+    )
+
+
 def test_directory_understands_specialty_and_insurer_in_natural_language(client):
     response = client.get(
         "/api/v1/directory/doctors",

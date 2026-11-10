@@ -174,6 +174,7 @@ def tool_specs() -> tuple[ToolSpec, ...]:
             ToolRisk.SENSITIVE,
             AppointmentsHandler(),
             True,
+            audit=True,
         ),
         ToolSpec(
             "create_appointment",
@@ -182,6 +183,7 @@ def tool_specs() -> tuple[ToolSpec, ...]:
             CreateAppointmentHandler(),
             True,
             True,
+            audit=True,
         ),
         ToolSpec(
             "cancel_appointment",
@@ -190,5 +192,6 @@ def tool_specs() -> tuple[ToolSpec, ...]:
             CancelAppointmentHandler(),
             True,
             True,
+            audit=True,
         ),
     )

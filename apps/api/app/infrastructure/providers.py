@@ -10,12 +10,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.bootstrap.config import Settings, get_settings
-
-if TYPE_CHECKING:
-    from app.agent.routing import RouteDecision
 
 
 @dataclass(frozen=True)
@@ -174,57 +171,6 @@ class MinioObjectStorage(ObjectStorageProvider):
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
 
-class LlmRoutingClassifier:
-    """Probabilistic last resort behind the deterministic routing rules."""
-
-    def __init__(self, settings: Settings) -> None:
-        self.settings = settings
-
-    def __call__(self, message: str) -> RouteDecision | None:
-        from app.agent.routing import RouteDecision
-
-        model = self._model()
-        if model is None:
-            return None
-        prompt = (
-            "Classifique a mensagem administrativa usando apenas o schema solicitado. "
-            "Nunca escolha ação clínica; use clinical_safety para diagnóstico ou emergência.\n"
-            f"Mensagem: {message}"
-        )
-        try:
-            return model.with_structured_output(RouteDecision).invoke(prompt)
-        except Exception:
-            return None
-
-    def _model(self):
-        settings = self.settings
-        if (
-            settings.llm_primary_provider == "openrouter"
-            and settings.allow_external_providers
-            and settings.openrouter_api_key
-        ):
-            from langchain_openai import ChatOpenAI
-
-            return ChatOpenAI(
-                api_key=settings.openrouter_api_key,
-                base_url=settings.openrouter_base_url,
-                model=settings.openrouter_model,
-                timeout=settings.openrouter_timeout_seconds,
-                max_retries=settings.openrouter_max_retries,
-                temperature=0,
-            )
-        if settings.llm_fallback_provider == "ollama" or settings.llm_primary_provider == "ollama":
-            from langchain_ollama import ChatOllama
-
-            return ChatOllama(
-                base_url=settings.ollama_base_url,
-                model=settings.ollama_model,
-                temperature=0,
-                keep_alive=settings.ollama_keep_alive,
-            )
-        return None
-
-
 @lru_cache
 def embedding_provider() -> EmbeddingProvider:
     settings = get_settings()
@@ -246,14 +192,6 @@ def ocr_provider() -> OcrProvider:
 def object_storage_provider() -> ObjectStorageProvider:
     settings = get_settings()
     return LocalObjectStorage() if settings.app_env == "test" else MinioObjectStorage(settings)
-
-
-@lru_cache
-def routing_classifier():
-    settings = get_settings()
-    if settings.app_env in {"test", "studio"} or not settings.llm_routing_enabled:
-        return None
-    return LlmRoutingClassifier(settings)
 
 
 HYBRID_KNOWLEDGE_QUERY = """

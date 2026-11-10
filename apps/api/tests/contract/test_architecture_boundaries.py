@@ -56,3 +56,29 @@ def test_worker_does_not_import_http_layer():
         for path in python_files(WORKER)
     }
     assert not {path: names for path, names in violations.items() if names}
+
+
+def test_no_router_is_imported_outside_http_layer():
+    violations = {}
+    for path in python_files(APP):
+        relative = path.relative_to(APP)
+        if relative.parts[0] == "api" or relative == Path("main.py"):
+            continue
+        bad = sorted(name for name in imports(path) if name.startswith("app.api.routers"))
+        if bad:
+            violations[str(path.relative_to(ROOT))] = bad
+
+    assert not violations
+
+
+def test_agent_has_no_direct_database_dependency():
+    violations = {
+        str(path.relative_to(ROOT)): sorted(
+            name
+            for name in imports(path)
+            if name.startswith(("sqlalchemy", "app.shared.infrastructure.models"))
+        )
+        for path in python_files(APP / "agent")
+    }
+
+    assert not {path: names for path, names in violations.items() if names}
