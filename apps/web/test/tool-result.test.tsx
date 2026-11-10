@@ -24,7 +24,7 @@ describe("ToolResultRenderer", () => {
       items: [{ id: "d1", name: "Dra. Ana", crm: "CRM 1", specialty_id: "s1", specialty: "Clínica", unit_id: "u1", unit: "Centro", insurer_ids: ["i1"], insurers: ["Saúde Azul"], active: true }],
     }} onAction={noop} />);
     expect(screen.getByText("Dra. Ana")).toBeVisible();
-    rerender(<ToolResultRenderer result={{ type: "knowledge", citations: [], confidence: 0.9 }} onAction={noop} />);
+    rerender(<ToolResultRenderer result={{ type: "knowledge", query: "Teste", citations: [], confidence: 0.9 }} onAction={noop} />);
     expect(screen.queryByText("Dra. Ana")).not.toBeInTheDocument();
   });
 
@@ -34,6 +34,9 @@ describe("ToolResultRenderer", () => {
       type: "availability",
       total: 1,
       timezone: "America/Sao_Paulo",
+      requested_from: "2030-01-10",
+      requested_to: "2030-01-10",
+      period: null,
       items: [{
         id: "slot-1",
         starts_at: "2030-01-10T12:00:00Z",

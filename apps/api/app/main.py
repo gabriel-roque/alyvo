@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -13,13 +14,22 @@ from app.api.errors import install_error_handlers
 from app.api.routers import auth, backoffice_router, chat, public
 from app.api.schemas.common import ErrorResponse, LivenessResponse, MetaResponse, ReadinessResponse
 from app.bootstrap.config import get_settings
+from app.infrastructure.providers import embedding_provider
 from app.shared.infrastructure.database import engine
 from app.shared.infrastructure.observability import correlation_id_context, record
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    record("application.started", environment=get_settings().app_env)
+    active_settings = get_settings()
+    if active_settings.app_env not in {"test", "studio"}:
+        started = time.perf_counter()
+        await asyncio.to_thread(lambda: embedding_provider().embed(["Alyvo"]))
+        record(
+            "embedding.warmed",
+            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
+    record("application.started", environment=active_settings.app_env)
     yield
     record("application.stopped")
 

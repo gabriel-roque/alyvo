@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 
 from app.bootstrap.config import get_settings
 from app.infrastructure.providers import embedding_provider, object_storage_provider, ocr_provider
-from app.modules.knowledge.application.chunking import structural_chunks
+from app.modules.knowledge.application.chunking import normalize_extracted_text, structural_chunks
 from app.shared.infrastructure.models import (
     DocumentStatus,
     KnowledgeChunk,
@@ -69,7 +69,7 @@ class ProcessKnowledgeDocument:
                     }
                 content = object_storage_provider().get_private(document.storage_key)
                 result = ocr_provider().extract(content, document.filename)
-                document.content = result.raw_text.strip()
+                document.content = normalize_extracted_text(result.raw_text)
                 if not document.content:
                     raise ValueError("Nenhum texto foi extraído do documento")
                 chunks = structural_chunks(document.content)

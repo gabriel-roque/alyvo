@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     openrouter_timeout_seconds: float = 12
     openrouter_max_retries: int = 1
     allow_external_providers: bool = True
+    llm_routing_enabled: bool = False
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""
     langsmith_project: str = "alyvo"
@@ -42,6 +43,7 @@ class Settings(BaseSettings):
     embedding_provider: str = "bge-m3"
     embedding_model: str = "BAAI/bge-m3"
     knowledge_index_version: str = "structural-bge-m3-v1"
+    knowledge_vector_min_score: float = 0.76
     chunk_parser_version: str = "structural-v1"
     reranker_enabled: bool = False
     reranker_model: str = "BAAI/bge-reranker-v2-m3"

@@ -133,6 +133,9 @@ class AvailabilityResult(ToolResultBase):
     items: list[AvailabilityItem]
     total: int
     timezone: str | None = None
+    requested_from: date
+    requested_to: date
+    period: Literal["morning", "afternoon", "evening"] | None = None
 
 
 class AppointmentsResult(ToolResultBase):
@@ -143,6 +146,7 @@ class AppointmentsResult(ToolResultBase):
 
 class KnowledgeResult(ToolResultBase):
     type: Literal["knowledge"] = "knowledge"
+    query: str
     citations: list[dict[str, str]]
     confidence: float
 

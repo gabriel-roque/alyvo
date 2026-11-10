@@ -5689,13 +5689,41 @@
               }
             ],
             "title": "Timezone"
+          },
+          "requested_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Requested From"
+          },
+          "requested_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Requested To"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "afternoon",
+                  "evening"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "total"
+          "total",
+          "requested_from",
+          "requested_to"
         ],
         "title": "AvailabilityResult"
       },
@@ -6732,6 +6760,10 @@
             "title": "Type",
             "default": "knowledge"
           },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
           "citations": {
             "items": {
               "additionalProperties": {
@@ -6750,6 +6782,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "query",
           "citations",
           "confidence"
         ],

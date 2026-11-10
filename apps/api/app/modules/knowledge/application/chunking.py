@@ -2,7 +2,26 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
+
+GLUED_HEADING_REPLACEMENTS = {
+    "PolíticadeproteçãodedadospessoaiseLGPD": "Política de proteção de dados pessoais e LGPD",
+    "Objetivoealcance": "Objetivo e alcance",
+    "Dadostratados": "Dados tratados",
+    "Finalidadesebaseslegais": "Finalidades e bases legais",
+    "Princípiosdetratamento": "Princípios de tratamento",
+    "Compartilhamentodedados": "Compartilhamento de dados",
+    "Segurançaeconfidencialidade": "Segurança e confidencialidade",
+    "Armazenamentoeeliminação": "Armazenamento e eliminação",
+    "Direitosdotitular": "Direitos do titular",
+    "Atualizaçãodapolítica": "Atualização da política",
+    "Etapasdoprocessamento": "Etapas do processamento",
+    "Prazosdereferência": "Prazos de referência",
+    "Fatoresquepodemalteraroprazo": "Fatores que podem alterar o prazo",
+    "Liberaçãoeacessoaosresultados": "Liberação e acesso aos resultados",
+    "Quandoentraremcontato": "Quando entrar em contato",
+}
 
 
 @dataclass(frozen=True)
@@ -12,6 +31,19 @@ class StructuralChunk:
     section: str
     page: int | None
     parent_id: str
+
+
+def normalize_extracted_text(text: str) -> str:
+    """Normalize parser/OCR artifacts without inventing document content."""
+
+    value = unicodedata.normalize("NFKC", text).replace("\u00ad", "")
+    value = re.sub(r"(?<=\w)-\s*\n\s*(?=\w)", "", value)
+    for glued, readable in GLUED_HEADING_REPLACEMENTS.items():
+        value = re.sub(re.escape(glued), f"{readable}\n", value, flags=re.IGNORECASE)
+    value = re.sub(r"(?<=[a-zà-ÿ])(?=[A-Z]{2,}\b)", " ", value)
+    value = value.replace("•", "\n• ")
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in value.splitlines()]
+    return "\n".join(line for line in lines if line).strip()
 
 
 def _windows(words: list[str], size: int, overlap: int) -> list[list[str]]:
@@ -54,6 +86,7 @@ def structural_chunks(
 ) -> list[StructuralChunk]:
     """Create parent-aware chunks while retaining headings, pages and table rows."""
 
+    text = normalize_extracted_text(text)
     chunks: list[StructuralChunk] = []
     pages = text.split("\f")
     for page_number, page in enumerate(pages, start=1):

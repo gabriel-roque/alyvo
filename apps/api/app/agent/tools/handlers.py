@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from app.agent.presentation.knowledge import relevant_excerpt
 from app.agent.tools.models import (
     AppointmentsResult,
     AvailabilityArguments,
@@ -68,7 +69,12 @@ class AvailabilityHandler:
             arguments.period,
         )
         return AvailabilityResult(
-            items=result["items"], total=result["total"], timezone=result["timezone"]
+            items=result["items"][:8],
+            total=result["total"],
+            timezone=result["timezone"],
+            requested_from=arguments.from_date,
+            requested_to=arguments.to_date or arguments.from_date,
+            period=arguments.period,
         )
 
 
@@ -87,12 +93,20 @@ class KnowledgeHandler:
 
     def execute(self, arguments: KnowledgeArguments, actor: Actor | None):
         result = KnowledgeService().retrieve(arguments.query)
-        citations = [
-            {"title": item.title, "source": item.source, "excerpt": item.content[:240]}
-            for item in result.evidence
-        ]
+        citations = []
+        seen_sources: set[tuple[str, str]] = set()
+        for item in result.evidence:
+            source_key = (item.title, item.source)
+            if source_key in seen_sources:
+                continue
+            excerpt = relevant_excerpt(arguments.query, item.content)
+            if excerpt:
+                citations.append({"title": item.title, "source": item.source, "excerpt": excerpt})
+                seen_sources.add(source_key)
+            if len(citations) == 3:
+                break
         confidence = result.confidence if result.answerability == Answerability.SUPPORTED else 0
-        return KnowledgeResult(citations=citations, confidence=confidence)
+        return KnowledgeResult(query=arguments.query, citations=citations, confidence=confidence)
 
 
 class CreateAppointmentHandler:

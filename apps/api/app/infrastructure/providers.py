@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import io
 import math
+import re
 import tempfile
+import unicodedata
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import lru_cache
@@ -249,7 +251,41 @@ def object_storage_provider() -> ObjectStorageProvider:
 @lru_cache
 def routing_classifier():
     settings = get_settings()
-    return None if settings.app_env in {"test", "studio"} else LlmRoutingClassifier(settings)
+    if settings.app_env in {"test", "studio"} or not settings.llm_routing_enabled:
+        return None
+    return LlmRoutingClassifier(settings)
+
+
+HYBRID_KNOWLEDGE_QUERY = """
+CALL () {
+  CALL db.index.fulltext.queryNodes('knowledge_chunk_text', $question, {limit: 30})
+  YIELD node, score
+  WITH collect({node: node, score: score}) AS rows
+  UNWIND range(0, size(rows) - 1) AS rank
+  RETURN rows[rank].node AS chunk,
+         1.0 / (60 + rank + 1) AS rrf,
+         rows[rank].score AS lexical_score,
+         0.0 AS vector_score
+  UNION ALL
+  CALL db.index.vector.queryNodes('knowledge_chunk_embedding', 30, $embedding)
+  YIELD node, score
+  WITH collect({node: node, score: score}) AS rows
+  UNWIND range(0, size(rows) - 1) AS rank
+  RETURN rows[rank].node AS chunk,
+         1.0 / (60 + rank + 1) AS rrf,
+         0.0 AS lexical_score,
+         rows[rank].score AS vector_score
+}
+MATCH (document:Document)-[:HAS_CHUNK]->(chunk)
+WITH document, chunk, sum(rrf) AS rrf_score,
+     max(lexical_score) AS lexical_score,
+     max(vector_score) AS vector_score
+WHERE lexical_score > 0 OR vector_score >= $minimum_vector_score
+RETURN chunk.id AS chunk_id, chunk.content AS content,
+       document.title AS title, document.source AS source,
+       lexical_score, vector_score, rrf_score
+ORDER BY rrf_score DESC LIMIT 30
+"""
 
 
 def hybrid_knowledge_search(question: str, limit: int = 5) -> list[KnowledgeHit]:
@@ -258,25 +294,6 @@ def hybrid_knowledge_search(question: str, limit: int = 5) -> list[KnowledgeHit]
 
     settings = get_settings()
     embedding = embedding_provider().embed([question])[0]
-    query = """
-    CALL {
-      CALL db.index.fulltext.queryNodes('knowledge_chunk_text', $question, {limit: 30})
-      YIELD node, score
-      WITH collect(node) AS nodes
-      UNWIND range(0, size(nodes) - 1) AS rank
-      RETURN nodes[rank] AS chunk, 1.0 / (60 + rank + 1) AS rrf
-      UNION ALL
-      CALL db.index.vector.queryNodes('knowledge_chunk_embedding', 30, $embedding)
-      YIELD node, score
-      WITH collect(node) AS nodes
-      UNWIND range(0, size(nodes) - 1) AS rank
-      RETURN nodes[rank] AS chunk, 1.0 / (60 + rank + 1) AS rrf
-    }
-    MATCH (document:Document)-[:HAS_CHUNK]->(chunk)
-    RETURN chunk.id AS chunk_id, chunk.content AS content,
-           document.title AS title, document.source AS source, sum(rrf) AS score
-    ORDER BY score DESC LIMIT $limit
-    """
     driver = GraphDatabase.driver(
         settings.neo4j_uri,
         auth=(settings.neo4j_user, settings.neo4j_password),
@@ -285,20 +302,87 @@ def hybrid_knowledge_search(question: str, limit: int = 5) -> list[KnowledgeHit]
     try:
         with driver.session() as session:
             rows = session.run(
-                query,
+                HYBRID_KNOWLEDGE_QUERY,
                 question=question,
                 embedding=embedding,
+                minimum_vector_score=settings.knowledge_vector_min_score,
                 limit=limit,
             )
-            return [
-                KnowledgeHit(
-                    chunk_id=row["chunk_id"],
-                    content=row["content"],
-                    title=row["title"],
-                    source=row["source"] or "Base institucional",
-                    score=float(row["score"]),
+            ranked: list[tuple[float, float, KnowledgeHit]] = []
+            for row in rows:
+                vector_score = float(row["vector_score"] or 0)
+                lexical_strength = _lexical_strength(
+                    question,
+                    f"{row['title']} {row['content']}",
                 )
-                for row in rows
-            ]
+                lexical_score = 0.86 * lexical_strength if lexical_strength >= 0.5 else 0
+                semantic_score = (
+                    vector_score if vector_score >= settings.knowledge_vector_min_score else 0
+                )
+                relevance = max(lexical_score, semantic_score)
+                if relevance <= 0:
+                    continue
+                ranked.append(
+                    (
+                        relevance,
+                        float(row["rrf_score"]),
+                        KnowledgeHit(
+                            chunk_id=row["chunk_id"],
+                            content=row["content"],
+                            title=row["title"],
+                            source=row["source"] or "Base institucional",
+                            score=relevance,
+                        ),
+                    )
+                )
+            ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+            return [item[2] for item in ranked[:limit]]
     finally:
         driver.close()
+
+
+def _lexical_strength(question: str, content: str) -> float:
+    question_terms = _search_terms(question)
+    if not question_terms:
+        return 0
+    content_terms = _search_terms(content)
+    matches = sum(
+        any(_same_term(term, candidate) for candidate in content_terms) for term in question_terms
+    )
+    return matches / len(question_terms)
+
+
+def _same_term(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    return min(len(left), len(right)) >= 5 and (
+        left.startswith(right[:5]) or right.startswith(left[:5])
+    )
+
+
+def _search_terms(value: str) -> set[str]:
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    plain = "".join(char for char in decomposed if not unicodedata.combining(char))
+    stop_words = {
+        "aos",
+        "como",
+        "da",
+        "das",
+        "de",
+        "do",
+        "dos",
+        "em",
+        "nos",
+        "para",
+        "por",
+        "qual",
+        "quais",
+        "que",
+        "uma",
+        "voces",
+    }
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", plain)
+        if len(token) >= 3 and token not in stop_words
+    }

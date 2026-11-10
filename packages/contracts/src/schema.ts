@@ -944,6 +944,18 @@ export interface components {
             total: number;
             /** Timezone */
             timezone?: string | null;
+            /**
+             * Requested From
+             * Format: date
+             */
+            requested_from: string;
+            /**
+             * Requested To
+             * Format: date
+             */
+            requested_to: string;
+            /** Period */
+            period?: ("morning" | "afternoon" | "evening") | null;
         };
         /** AvailabilityRulePayload */
         AvailabilityRulePayload: {
@@ -1350,6 +1362,8 @@ export interface components {
              * @enum {string}
              */
             type: "knowledge";
+            /** Query */
+            query: string;
             /** Citations */
             citations: {
                 [key: string]: string;

@@ -32,7 +32,8 @@ function messageReducer(state: Message[], action: MessageAction): Message[] {
 
 const welcome: Message = {
   role: "assistant",
-  content: "Olá! Posso ajudar com médicos, convênios, exames, horários e suas consultas. Você pode começar sem se identificar.",
+  content:
+    "Oi! Que bom ter você por aqui. Sou a assistente virtual da Alyvo e posso ajudar com informações da clínica, médicos e agendamentos. Por onde você gostaria de começar?",
 };
 
 export default function ChatPage() {
@@ -160,7 +161,7 @@ export default function ChatPage() {
       <section className="chat-window" aria-label="Conversa com a Alyvo">
         <header className="chat-intro">
           <div className="assistant-mark"><Sparkles /></div>
-          <div><h1>Assistente Alyvo</h1><p>Informação administrativa, agenda e conhecimento da clínica.</p></div>
+          <div><h1>Assistente Alyvo</h1><p>Uma conversa simples para cuidar da sua jornada na clínica.</p></div>
           <span><i /> Pronta para ajudar</span>
         </header>
 

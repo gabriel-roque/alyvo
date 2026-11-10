@@ -129,3 +129,13 @@ def test_confirmation_is_idempotent(client, patient_token):
     assert response.status_code == 200
     confirmation = response.json()["confirmation_request"]
     assert confirmation["id"]
+
+
+def test_directory_understands_specialty_and_insurer_in_natural_language(client):
+    response = client.get(
+        "/api/v1/directory/doctors",
+        params={"q": "Quais cardiologistas aceitam Vida+?"},
+    )
+
+    assert response.status_code == 200
+    assert [doctor["name"] for doctor in response.json()["items"]] == ["Dra. Marina Costa"]

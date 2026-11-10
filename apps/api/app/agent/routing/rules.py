@@ -9,7 +9,8 @@ from app.agent.routing.models import Action, Domain, RiskLevel, RouteDecision, T
 
 def normalize(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value.casefold())
-    return " ".join("".join(char for char in decomposed if not unicodedata.combining(char)).split())
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join("".join(char if char.isalnum() else " " for char in without_accents).split())
 
 
 def decision(
@@ -43,10 +44,19 @@ class SafetyRule:
             "qual remedio",
             "interprete meu exame",
             "interpretar resultado",
+            "estou sentindo",
+            "estou com dor",
+            "dor de cabeca",
+            "qual medico poderia me atender",
+            "qual medico devo procurar",
+            "pelos meus sintomas",
         )
         if any(term in text for term in clinical):
             return decision(
-                Domain.CLINICAL_SAFETY, Action.REJECT, Topic.CLINICAL, risk=RiskLevel.SENSITIVE
+                Domain.CLINICAL_SAFETY,
+                Action.CLARIFY,
+                Topic.CLINICAL,
+                risk=RiskLevel.SENSITIVE,
             )
         return None
 
@@ -99,6 +109,10 @@ class OperationalHoursRule:
             "clinica abre",
             "clinica fecha",
             "ate que horas a clinica",
+            "atendem aos finais de semana",
+            "atende aos finais de semana",
+            "atendem no fim de semana",
+            "atende no fim de semana",
         )
         if any(term in text for term in institutional_hours):
             return decision(Domain.KNOWLEDGE, Action.SEARCH, Topic.INSTITUTIONAL)
@@ -111,6 +125,20 @@ class SchedulingRule:
         if any(
             term in text for term in ("agendar", "marcar", "horario", "disponibilidade", "agenda")
         ):
+            return decision(Domain.SCHEDULING, Action.SEARCH, Topic.AVAILABILITY)
+        date_follow_up = (
+            "hoje",
+            "amanha",
+            "depois de amanha",
+            "segunda",
+            "terca",
+            "quarta",
+            "quinta",
+            "sexta",
+            "sabado",
+            "domingo",
+        )
+        if len(text.split()) <= 8 and any(term in text for term in date_follow_up):
             return decision(Domain.SCHEDULING, Action.SEARCH, Topic.AVAILABILITY)
         return None
 
@@ -144,8 +172,8 @@ class KnowledgeRule:
             "documento",
             "atendimento",
             "funcionamento",
-            "informacao",
-            "duvida",
+            "lgpd",
+            "privacidade",
         )
         if any(term in text for term in knowledge_terms):
             return decision(Domain.KNOWLEDGE, Action.SEARCH, Topic.INSTITUTIONAL, 0.75)
@@ -163,11 +191,12 @@ class LlmFallbackRule:
             return self.classifier(message)
         if normalize(message):
             return decision(
-                Domain.KNOWLEDGE,
-                Action.SEARCH,
-                Topic.INSTITUTIONAL,
-                0.55,
-                reason="deterministic fallback",
+                Domain.FALLBACK,
+                Action.CLARIFY,
+                Topic.UNKNOWN,
+                0.4,
+                needs_clarification=True,
+                reason="safe deterministic fallback",
             )
         return decision(
             Domain.FALLBACK,

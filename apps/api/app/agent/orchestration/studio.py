@@ -35,11 +35,18 @@ class SyntheticHandler:
         if self.name == "search_directory":
             return DirectoryResult(items=[], total=0)
         if self.name == "search_availability":
-            return AvailabilityResult(items=[], total=0, timezone="America/Sao_Paulo")
+            return AvailabilityResult(
+                items=[],
+                total=0,
+                timezone="America/Sao_Paulo",
+                requested_from=arguments.from_date,
+                requested_to=arguments.to_date or arguments.from_date,
+                period=arguments.period,
+            )
         if self.name == "list_my_appointments":
             return AppointmentsResult(items=[], total=0)
         if self.name == "search_knowledge":
-            return KnowledgeResult(citations=[], confidence=0)
+            return KnowledgeResult(query="Consulta sintética", citations=[], confidence=0)
         now = datetime.now(timezone.utc) + timedelta(days=1)
         result_type = (
             "appointment_created" if self.name == "create_appointment" else "appointment_cancelled"

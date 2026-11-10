@@ -122,13 +122,15 @@ class KnowledgeService:
             try:
                 hits = hybrid_knowledge_search(question)
                 if hits:
+                    minimum_relevance = max(hit.score for hit in hits) - 0.04
+                    hits = [hit for hit in hits if hit.score >= minimum_relevance]
                     evidence = tuple(
                         Evidence(hit.chunk_id, hit.content, hit.title, hit.source, hit.score)
                         for hit in hits
                     )
                     return RetrievalResult(
                         evidence,
-                        0.88,
+                        min(0.97, max(hit.score for hit in hits)),
                         "neo4j-rrf",
                         Answerability.SUPPORTED,
                     )
