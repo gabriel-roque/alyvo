@@ -5,13 +5,15 @@ flowchart TB
   Browser --> Web[Next.js]
   Web --> API[FastAPI]
   API --> PG[(PostgreSQL)]
-  API --> Redis[(Redis)]
   API --> MinIO[(MinIO)]
+  API --> Neo4j[(Neo4j)]
   API --> LLM[OpenRouter / Ollama]
   Worker[Celery worker] --> PG
-  Worker --> Redis
-  Worker --> Neo4j[(Neo4j)]
+  Beat[Celery beat] --> Redis[(Redis)]
+  Redis --> Worker
+  Worker --> Neo4j
   Worker --> MinIO
-  Beat[Celery beat] --> Redis
   Docs[Docusaurus] -. engenharia .-> Browser
 ```
+
+Consulte [Responsabilidades dos componentes](component-responsibilities.md) para entender por que cada serviço existe, quais dados mantém e como participa dos principais fluxos.

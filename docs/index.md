@@ -12,5 +12,6 @@ O Alyvo é um assistente administrativo para **uma única clínica**. Este porta
 - Portal local: `http://localhost:8001`, publicado pelo Docusaurus.
 - Decisões estruturais: [ADRs](decisions/0001-modular-monolith.md).
 - Visão técnica: [arquitetura](architecture/overview.md).
+- Validação funcional: [prompts de teste e resultados esperados](use-cases/test-prompts.md).
 
 Dados de exemplos e seeds são exclusivamente sintéticos.

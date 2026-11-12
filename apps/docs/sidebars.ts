@@ -6,12 +6,19 @@ const sidebars: SidebarsConfig = {
     'getting-started',
     {
       type: 'category',
+      label: 'Casos de uso',
+      collapsed: false,
+      items: ['use-cases/test-prompts'],
+    },
+    {
+      type: 'category',
       label: 'Arquitetura',
       collapsed: false,
       items: [
         'architecture/overview',
         'architecture/context',
         'architecture/containers',
+        'architecture/component-responsibilities',
         'architecture/backend-components',
         'architecture/agent-components',
         'architecture/frontend-components',
