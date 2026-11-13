@@ -16,11 +16,12 @@ from app.agent.presentation import (
     present_tool_result,
     response,
 )
+from app.agent.presentation.enrichment import post_appointment_guidance
 from app.agent.routing import ConversationMarker, Domain, RouteDecision, RuleChain
-from app.agent.routing.context import resolve_from_context
 from app.agent.routing.rules import normalize
 from app.agent.tools import ToolGate, ToolInvocationPolicy, ToolRegistry, build_tool_registry
-from app.agent.tools.models import ToolResult
+from app.agent.tools.models import AppointmentResult, ToolResult
+from app.agent.understanding import AnswerRequirement, TurnInterpreter, TurnUnderstanding
 from app.bootstrap.config import get_settings
 from app.modules.identity.domain import Actor
 from app.shared.infrastructure.observability import record
@@ -33,6 +34,7 @@ class AgentState(TypedDict, total=False):
     context: ConversationContext
     history: tuple[ConversationTurn, ...]
     route: RouteDecision
+    understanding: TurnUnderstanding
     plan: ExecutionPlan
     tool_name: str
     tool_arguments: dict[str, object]
@@ -57,10 +59,14 @@ class AgentOrchestrator:
         composer: ResponseComposer | None = None,
     ):
         if rules is None:
-            from app.infrastructure.llm import routing_classifier
+            from app.infrastructure.llm import turn_interpreter
 
-            rules = RuleChain(fallback_classifier=routing_classifier())
+            rules = RuleChain()
+            semantic_interpreter = turn_interpreter()
+        else:
+            semantic_interpreter = None
         self.rules = rules
+        self.interpreter = TurnInterpreter(rules, semantic_interpreter)
         self.tools = tools or build_tool_registry()
         self.policy = policy or DecisionPolicy()
         if composer is None:
@@ -103,6 +109,7 @@ class AgentOrchestrator:
             route=output["route"],
             plan=output["plan"],
         )
+        understanding = output["understanding"]
         record(
             "agent.decision",
             route_source=outcome.route.source,
@@ -112,6 +119,9 @@ class AgentOrchestrator:
             confidence=outcome.route.confidence,
             plan_kind=outcome.plan.kind,
             tools=[step.tool_name for step in outcome.plan.steps],
+            answer_requirements=list(understanding.requirements),
+            refers_to_previous_result=understanding.refers_to_previous_result,
+            correction=understanding.correction,
             duration_ms=round((time.perf_counter() - started) * 1000, 1),
         )
         return outcome
@@ -120,10 +130,11 @@ class AgentOrchestrator:
     def _normalize(state: AgentState) -> dict[str, object]:
         return {"normalized_message": normalize(state["message"])}
 
-    def _classify(self, state: AgentState) -> dict[str, object]:
-        route = self.rules.classify(state["message"])
-        route = resolve_from_context(route, state["message"], state["context"])
-        return {"route": route}
+    def _understand(self, state: AgentState) -> dict[str, object]:
+        understanding = self.interpreter.understand(
+            state["message"], state["context"], state.get("history", ())
+        )
+        return {"understanding": understanding, "route": understanding.route}
 
     def _plan(self, state: AgentState) -> dict[str, object]:
         settings = get_settings()
@@ -143,34 +154,54 @@ class AgentOrchestrator:
     def _execute(self, state: AgentState) -> dict[str, object]:
         if state.get("result"):
             return {}
-        spec = self.tools.get(state["tool_name"])
         actor = state.get("actor")
-        gate = self.tool_policy.evaluate(spec, actor)
-        if gate == ToolGate.AUTHENTICATE:
-            return {
-                "result": response(
-                    "Confirme sua identidade para continuar.",
-                    spec.name,
-                    auth_required=True,
-                    pending_tool={"name": spec.name, "arguments": state["tool_arguments"]},
-                )
-            }
-        if gate == ToolGate.CONFIRM:
-            return {
-                "result": response(
-                    "Revise os dados antes de concluir esta operação.",
-                    spec.name,
-                    pending_tool={"name": spec.name, "arguments": state["tool_arguments"]},
-                )
-            }
-        arguments = spec.handler.arguments_model.model_validate(state["tool_arguments"])
-        return {"tool_result": spec.handler.execute(arguments, actor)}
+        executed: list[ToolResult] = []
+        for step in state["plan"].steps:
+            spec = self.tools.get(step.tool_name)
+            gate = self.tool_policy.evaluate(spec, actor)
+            if gate == ToolGate.AUTHENTICATE:
+                return {
+                    "result": response(
+                        "Confirme sua identidade para continuar.",
+                        spec.name,
+                        auth_required=True,
+                        pending_tool={"name": spec.name, "arguments": step.arguments},
+                    )
+                }
+            if gate == ToolGate.CONFIRM:
+                return {
+                    "result": response(
+                        "Revise os dados antes de concluir esta operação.",
+                        spec.name,
+                        pending_tool={"name": spec.name, "arguments": step.arguments},
+                    )
+                }
+            arguments = spec.handler.arguments_model.model_validate(step.arguments)
+            executed.append(spec.handler.execute(arguments, actor))
+        if not executed:
+            raise RuntimeError("Plano executável sem resultado")
+        result = executed[0]
+        update: dict[str, object] = {"tool_result": result}
+        if result.type == "directory":
+            update["context"] = state["context"].with_directory_result(
+                state["message"],
+                [item.id for item in result.items],
+                [item.specialty for item in result.items],
+            )
+        return update
 
     @staticmethod
     def _validate(state: AgentState) -> dict[str, object]:
         if state.get("result"):
             return {}
         state["tool_result"].model_dump(mode="json")
+        requirements = state["understanding"].requirements
+        if (
+            AnswerRequirement.INSURERS in requirements
+            and state["tool_result"].type == "directory"
+            and any(item.insurers is None for item in state["tool_result"].items)
+        ):
+            raise RuntimeError("Plano incompleto: convênios não foram resolvidos")
         return {}
 
     def _present_node(self, state: AgentState) -> dict[str, object]:
@@ -179,7 +210,11 @@ class AgentOrchestrator:
         if draft is None:
             if tool_result is None:
                 raise RuntimeError("Apresentação sem resposta ou resultado de ferramenta")
-            draft = present_tool_result(state["tool_name"], tool_result)
+            draft = present_tool_result(
+                state["tool_name"],
+                tool_result,
+                tuple(state["understanding"].requirements),
+            )
         draft = _apply_conversation_marker(draft, state["route"], state["message"])
         result = self.composer.compose(
             CompositionRequest(
@@ -198,14 +233,14 @@ class AgentOrchestrator:
     def _build_graph(self) -> Any:
         graph = StateGraph(AgentState)
         graph.add_node("normalize", self._normalize)
-        graph.add_node("classify", self._classify)
+        graph.add_node("understand", self._understand)
         graph.add_node("plan", self._plan)
         graph.add_node("execute", self._execute)
         graph.add_node("validate", self._validate)
         graph.add_node("present", self._present_node)
         graph.add_edge(START, "normalize")
-        graph.add_edge("normalize", "classify")
-        graph.add_edge("classify", "plan")
+        graph.add_edge("normalize", "understand")
+        graph.add_edge("understand", "plan")
         graph.add_edge("plan", "execute")
         graph.add_edge("execute", "validate")
         graph.add_edge("validate", "present")
@@ -214,11 +249,24 @@ class AgentOrchestrator:
 
     def present_result(self, tool_name: str, result: ToolResult) -> dict[str, object]:
         draft = present_tool_result(tool_name, result)
+        if isinstance(result, AppointmentResult) and result.type in {
+            "appointment_created",
+            "appointment_rescheduled",
+        }:
+            guidance, citations = post_appointment_guidance(result)
+            if guidance:
+                draft = {
+                    **draft,
+                    "answer": str(draft["answer"]) + guidance,
+                    "citations": citations,
+                }
         scheduling = tool_name in {
             "search_availability",
             "list_my_appointments",
             "create_appointment",
             "cancel_appointment",
+            "start_reschedule",
+            "reschedule_appointment",
         }
         return self.composer.compose(
             CompositionRequest(

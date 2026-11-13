@@ -1,12 +1,16 @@
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
+from app.agent.conversation import ConversationContext
 from app.agent.orchestration import AgentOrchestrator
 from app.agent.orchestration.dates import parse_availability_request
 from app.agent.presentation.knowledge import relevant_excerpt
 from app.agent.routing import Action, Domain, RouteSource, RuleChain, Topic
 from app.agent.tools import ToolRegistry, build_tool_registry
+from app.agent.tools.models import AppointmentItem, AppointmentResult
+from app.agent.understanding import AnswerRequirement, TurnInterpreter
+from app.modules.knowledge.domain.models import Answerability, Evidence, RetrievalResult
 
 
 def test_ordered_rules_prioritize_safety():
@@ -98,6 +102,17 @@ def test_availability_slots_are_collected_across_turns():
     assert third.plan.first_step.arguments["period"] == "afternoon"
 
 
+def test_doctor_is_resolved_and_preserved_across_availability_turns():
+    agent = AgentOrchestrator(rules=RuleChain())
+    first = agent.run_with_context("Quais são os dias disponíveis da Dra. Marina Costa?")
+    second = agent.run_with_context("Quero no dia 20/11/2030", context=first.context)
+
+    assert first.response["intent"] == "clarify_availability"
+    assert first.context.availability.doctor_id is not None
+    assert second.plan.first_step is not None
+    assert second.plan.first_step.arguments["doctor_id"] == first.context.availability.doctor_id
+
+
 def test_small_talk_does_not_discard_pending_slot_collection():
     agent = AgentOrchestrator(rules=RuleChain())
     first = agent.run_with_context("Quero ver horários disponíveis")
@@ -134,6 +149,20 @@ def test_doctor_request_wins_over_generic_insurer_listing():
     assert Topic.INSURER in decision.secondary_topics
 
 
+def test_compound_turn_keeps_every_answer_requirement():
+    understanding = TurnInterpreter(RuleChain()).understand(
+        "Atendem cardiologia? Quais médicos e quais planos eles aceitam?",
+        ConversationContext(),
+    )
+
+    assert understanding.route.topic == Topic.DOCTOR
+    assert understanding.requirements == [
+        AnswerRequirement.SERVICE_CONFIRMATION,
+        AnswerRequirement.PROFESSIONALS,
+        AnswerRequirement.INSURERS,
+    ]
+
+
 def test_symptom_request_does_not_recommend_random_doctors():
     result = AgentOrchestrator(rules=RuleChain()).run(
         "Estou sentindo fortes dores de cabeça, qual médico devo procurar?"
@@ -160,7 +189,7 @@ def test_registry_is_single_source_of_tool_contracts():
     registry = build_tool_registry()
     tools = registry.provider_tools()
     names = [tool["function"]["name"] for tool in tools]
-    assert len(names) == len(set(names)) == 10
+    assert len(names) == len(set(names)) == 12
     assert all(tool["function"]["parameters"]["additionalProperties"] is False for tool in tools)
 
 
@@ -171,3 +200,37 @@ def test_registry_rejects_an_unsafe_write_tool():
 
     with pytest.raises(ValueError, match="autenticação e confirmação"):
         ToolRegistry((unsafe,))
+
+
+def test_confirmed_appointment_is_enriched_only_with_applicable_guidance(monkeypatch):
+    evidence = Evidence(
+        "chunk-1",
+        "Para consultas com a Dra. Marina Costa na Unidade Centro, chegar com 20 minutos de antecedência.",
+        "Manual de atendimento",
+        "Base institucional",
+        0.92,
+    )
+    monkeypatch.setattr(
+        "app.agent.presentation.enrichment.KnowledgeService.retrieve",
+        lambda self, question: RetrievalResult((evidence,), 0.92, "test", Answerability.SUPPORTED),
+    )
+    result = AppointmentResult(
+        type="appointment_created",
+        appointment=AppointmentItem(
+            id="appointment-1",
+            patient_id="patient-1",
+            doctor_id="doctor-1",
+            doctor="Dra. Marina Costa",
+            unit_id="unit-1",
+            unit="Unidade Centro",
+            starts_at=datetime(2030, 1, 10, 12, tzinfo=timezone.utc),
+            ends_at=datetime(2030, 1, 10, 12, 30, tzinfo=timezone.utc),
+            status="confirmed",
+            reason="Consulta",
+        ),
+    )
+
+    response = AgentOrchestrator(rules=RuleChain()).present_result("create_appointment", result)
+
+    assert "20 minutos de antecedência" in response["answer"]
+    assert response["citations"][0]["title"] == "Manual de atendimento"

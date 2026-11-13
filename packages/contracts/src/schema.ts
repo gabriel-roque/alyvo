@@ -726,7 +726,7 @@ export interface components {
             /** Tool */
             tool: string;
             /** Arguments */
-            arguments: components["schemas"]["EmptyArguments"] | components["schemas"]["SearchDirectoryArguments"] | components["schemas"]["AvailabilityArguments"] | components["schemas"]["KnowledgeArguments"] | components["schemas"]["CreateAppointmentArguments"] | components["schemas"]["CancelAppointmentArguments"];
+            arguments: components["schemas"]["EmptyArguments"] | components["schemas"]["SearchDirectoryArguments"] | components["schemas"]["AvailabilityArguments"] | components["schemas"]["KnowledgeArguments"] | components["schemas"]["CreateAppointmentArguments"] | components["schemas"]["CancelAppointmentArguments"] | components["schemas"]["StartRescheduleArguments"] | components["schemas"]["RescheduleAppointmentArguments"];
         };
         /** AppointmentCreate */
         AppointmentCreate: {
@@ -778,7 +778,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "appointment_cancelled" | "appointment_created";
+            type: "appointment_cancelled" | "appointment_created" | "appointment_rescheduled";
             appointment: components["schemas"]["AppointmentItem"];
         };
         /** AppointmentUpdate */
@@ -853,6 +853,8 @@ export interface components {
             insurer_id?: string | null;
             /** Period */
             period?: ("morning" | "afternoon" | "evening") | null;
+            /** Reschedule Appointment Id */
+            reschedule_appointment_id?: string | null;
         };
         /** AvailabilityBlockPayload */
         AvailabilityBlockPayload: {
@@ -956,6 +958,8 @@ export interface components {
             requested_to: string;
             /** Period */
             period?: ("morning" | "afternoon" | "evening") | null;
+            /** Reschedule Appointment Id */
+            reschedule_appointment_id?: string | null;
         };
         /** AvailabilityRulePayload */
         AvailabilityRulePayload: {
@@ -1144,7 +1148,7 @@ export interface components {
             auth_required: boolean;
             confirmation_request?: components["schemas"]["ConfirmationRequest"] | null;
             /** Tool Result */
-            tool_result?: (components["schemas"]["InsurersResult"] | components["schemas"]["ExamsResult"] | components["schemas"]["SpecialtiesResult"] | components["schemas"]["UnitsResult"] | components["schemas"]["DirectoryResult"] | components["schemas"]["AvailabilityResult"] | components["schemas"]["AppointmentsResult"] | components["schemas"]["KnowledgeResult"] | components["schemas"]["AppointmentResult"]) | null;
+            tool_result?: (components["schemas"]["InsurersResult"] | components["schemas"]["ExamsResult"] | components["schemas"]["SpecialtiesResult"] | components["schemas"]["UnitsResult"] | components["schemas"]["DirectoryResult"] | components["schemas"]["AvailabilityResult"] | components["schemas"]["AppointmentsResult"] | components["schemas"]["KnowledgeResult"] | components["schemas"]["AppointmentResult"] | components["schemas"]["RescheduleStartedResult"]) | null;
             tool_call?: components["schemas"]["ToolCallView"] | null;
             /** Suggestions */
             suggestions?: components["schemas"]["Suggestion"][];
@@ -1569,7 +1573,7 @@ export interface components {
             /** Name */
             name: string;
             /** Arguments */
-            arguments: components["schemas"]["EmptyArguments"] | components["schemas"]["SearchDirectoryArguments"] | components["schemas"]["AvailabilityArguments"] | components["schemas"]["KnowledgeArguments"] | components["schemas"]["CreateAppointmentArguments"] | components["schemas"]["CancelAppointmentArguments"];
+            arguments: components["schemas"]["EmptyArguments"] | components["schemas"]["SearchDirectoryArguments"] | components["schemas"]["AvailabilityArguments"] | components["schemas"]["KnowledgeArguments"] | components["schemas"]["CreateAppointmentArguments"] | components["schemas"]["CancelAppointmentArguments"] | components["schemas"]["StartRescheduleArguments"] | components["schemas"]["RescheduleAppointmentArguments"];
         };
         /** PublishDocument */
         PublishDocument: {
@@ -1588,6 +1592,25 @@ export interface components {
             /** Database */
             database: string;
         };
+        /** RescheduleAppointmentArguments */
+        RescheduleAppointmentArguments: {
+            /** Appointment Id */
+            appointment_id: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+        };
+        /** RescheduleStartedResult */
+        RescheduleStartedResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "reschedule_started";
+            appointment: components["schemas"]["AppointmentItem"];
+        };
         /** SearchDirectoryArguments */
         SearchDirectoryArguments: {
             /**
@@ -1595,6 +1618,8 @@ export interface components {
              * @default
              */
             query: string;
+            /** Doctor Ids */
+            doctor_ids?: string[];
         };
         /** SessionResponse */
         SessionResponse: {
@@ -1664,6 +1689,11 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** StartRescheduleArguments */
+        StartRescheduleArguments: {
+            /** Appointment Id */
+            appointment_id: string;
         };
         /** Suggestion */
         Suggestion: {

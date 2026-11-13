@@ -16,6 +16,7 @@ class EmptyArguments(ToolArguments):
 
 class SearchDirectoryArguments(ToolArguments):
     query: str = ""
+    doctor_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
 class AvailabilityArguments(ToolArguments):
@@ -26,6 +27,7 @@ class AvailabilityArguments(ToolArguments):
     unit_id: str | None = None
     insurer_id: str | None = None
     period: Literal["morning", "afternoon", "evening"] | None = None
+    reschedule_appointment_id: str | None = None
 
 
 class KnowledgeArguments(ToolArguments):
@@ -40,6 +42,15 @@ class CreateAppointmentArguments(ToolArguments):
 
 class CancelAppointmentArguments(ToolArguments):
     appointment_id: str
+
+
+class StartRescheduleArguments(ToolArguments):
+    appointment_id: str
+
+
+class RescheduleAppointmentArguments(ToolArguments):
+    appointment_id: str
+    starts_at: datetime
 
 
 class ToolResultBase(BaseModel):
@@ -136,6 +147,7 @@ class AvailabilityResult(ToolResultBase):
     requested_from: date
     requested_to: date
     period: Literal["morning", "afternoon", "evening"] | None = None
+    reschedule_appointment_id: str | None = None
 
 
 class AppointmentsResult(ToolResultBase):
@@ -152,7 +164,12 @@ class KnowledgeResult(ToolResultBase):
 
 
 class AppointmentResult(ToolResultBase):
-    type: Literal["appointment_created", "appointment_cancelled"]
+    type: Literal["appointment_created", "appointment_cancelled", "appointment_rescheduled"]
+    appointment: AppointmentItem
+
+
+class RescheduleStartedResult(ToolResultBase):
+    type: Literal["reschedule_started"] = "reschedule_started"
     appointment: AppointmentItem
 
 
@@ -165,7 +182,8 @@ ToolResult = Annotated[
     | AvailabilityResult
     | AppointmentsResult
     | KnowledgeResult
-    | AppointmentResult,
+    | AppointmentResult
+    | RescheduleStartedResult,
     Field(discriminator="type"),
 ]
 
@@ -176,4 +194,6 @@ ToolArgumentsUnion = (
     | KnowledgeArguments
     | CreateAppointmentArguments
     | CancelAppointmentArguments
+    | StartRescheduleArguments
+    | RescheduleAppointmentArguments
 )

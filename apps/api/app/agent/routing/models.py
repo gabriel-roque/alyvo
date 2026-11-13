@@ -23,6 +23,7 @@ class Action(StrEnum):
     LIST = "list"
     CREATE = "create"
     CANCEL = "cancel"
+    RESCHEDULE = "reschedule"
     REJECT = "reject"
     CLARIFY = "clarify"
 

@@ -4,14 +4,19 @@ from datetime import date
 
 from app.agent.conversation import AvailabilitySlots, ConversationContext
 from app.agent.orchestration.dates import extract_availability_slots
+from app.agent.planning.capabilities import CapabilityRegistry
 from app.agent.planning.models import ExecutionPlan, PlanKind, PlanStep
 from app.agent.presentation import response
 from app.agent.routing import Action, Domain, RiskLevel, RouteDecision, Topic
 from app.agent.routing.rules import normalize
+from app.modules.catalog.application import CatalogService
 
 
 class DecisionPolicy:
     """Turns an interpretation into an auditable, deterministic execution plan."""
+
+    def __init__(self, capabilities: CapabilityRegistry | None = None) -> None:
+        self.capabilities = capabilities or CapabilityRegistry()
 
     def plan(
         self,
@@ -33,14 +38,23 @@ class DecisionPolicy:
             return self._availability_plan(message, context, today)
         return self._tool_or_rag_plan(route, message, context)
 
-    @staticmethod
     def _availability_plan(
-        message: str, context: ConversationContext, today: date
+        self, message: str, context: ConversationContext, today: date
     ) -> ExecutionPlan:
         text = normalize(message)
         if any(term in text for term in ("outro dia", "outra data")):
             context = context.model_copy(update={"availability": AvailabilitySlots()})
-        updated = context.with_availability(extract_availability_slots(message, today))
+        extracted = extract_availability_slots(message, today)
+        entities = CatalogService().resolve_doctor_entities(message)
+        extracted = extracted.model_copy(
+            update={
+                "doctor_id": _single(entities["doctor_ids"]),
+                "specialty_id": _single(entities["specialty_ids"]),
+                "unit_id": _single(entities["unit_ids"]),
+                "insurer_id": _single(entities["insurer_ids"]),
+            }
+        )
+        updated = context.with_availability(extracted)
         if updated.availability.from_date is None:
             return ExecutionPlan(
                 kind=PlanKind.CLARIFICATION,
@@ -58,23 +72,40 @@ class DecisionPolicy:
                 reason_codes=["missing_slot:availability.date"],
                 context=updated,
             )
+        arguments: dict[str, object] = {
+            key: value for key, value in updated.availability.tool_arguments().items()
+        }
+        if pending := updated.pending_reschedule:
+            arguments.update(
+                {
+                    "doctor_id": pending.doctor_id,
+                    "reschedule_appointment_id": pending.appointment_id,
+                }
+            )
         return ExecutionPlan(
             kind=PlanKind.TOOL,
             steps=[
                 PlanStep(
                     tool_name="search_availability",
-                    arguments=updated.availability.tool_arguments(),
+                    arguments=arguments,
                 )
             ],
             reason_codes=["authoritative_data:scheduling"],
             context=updated.with_tool("search_availability"),
         )
 
-    @staticmethod
     def _tool_or_rag_plan(
-        route: RouteDecision, message: str, context: ConversationContext
+        self, route: RouteDecision, message: str, context: ConversationContext
     ) -> ExecutionPlan:
-        tool_name, arguments = _tool_call(route, message)
+        capability = self.capabilities.resolve(route.domain, route.action, route.topic)
+        tool_name = capability.tool_name if capability else "search_knowledge"
+        arguments: dict[str, object] = {}
+        if tool_name == "search_directory":
+            arguments = {"query": message}
+            if route.source.value == "context" and context.directory.doctor_ids:
+                arguments["doctor_ids"] = context.directory.doctor_ids
+        elif tool_name == "search_knowledge":
+            arguments = {"query": message}
         kind = PlanKind.RAG if tool_name == "search_knowledge" else PlanKind.TOOL
         reason = "approved_documents" if kind == PlanKind.RAG else "authoritative_structured_data"
         return ExecutionPlan(
@@ -114,22 +145,6 @@ class DecisionPolicy:
         }
         answer = messages.get(route.action)
         return response(answer, "conversation") if answer else None
-
-
-def _tool_call(route: RouteDecision, message: str) -> tuple[str, dict[str, object]]:
-    topic_tools = {
-        Topic.INSURER: "list_insurers",
-        Topic.SPECIALTY: "list_specialties",
-        Topic.UNIT: "list_units",
-        Topic.EXAM: "list_exams",
-        Topic.DOCTOR: "search_directory",
-    }
-    if route.topic == Topic.OWN_APPOINTMENT:
-        return "list_my_appointments", {}
-    if route.topic in topic_tools:
-        arguments: dict[str, object] = {"query": message} if route.topic == Topic.DOCTOR else {}
-        return topic_tools[route.topic], arguments
-    return "search_knowledge", {"query": message}
 
 
 def _clinical_response(route: RouteDecision) -> dict[str, object]:
@@ -177,3 +192,7 @@ def _greeting(message: str) -> str:
     if "boa noite" in text:
         return f"Boa noite!{social} Como posso ajudar você?"
     return f"Oi!{social or ' Que bom falar com você.'} Como posso ajudar hoje?"
+
+
+def _single(values: list[str]) -> str | None:
+    return values[0] if len(values) == 1 else None

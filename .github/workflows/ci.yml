@@ -29,6 +29,7 @@ jobs:
           apps/api/tests/contract
           apps/api/tests/test_agent_quality_gates.py
           apps/api/tests/test_agent_evaluations.py
+          apps/api/tests/test_agent_regression_scenarios.py
       - run: uv run pytest --cov --cov-fail-under=80
         env: { APP_ENV: test, LLM_PRIMARY_PROVIDER: mock, LLM_FALLBACK_PROVIDER: mock, EMBEDDING_PROVIDER: mock }
       - name: Domain and application coverage gate

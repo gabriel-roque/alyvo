@@ -5,6 +5,7 @@ from typing import Any
 
 from app.agent.routing.rules import normalize
 from app.agent.tools.models import ToolResult
+from app.agent.understanding import AnswerRequirement
 
 
 def response(answer: str, intent: str, **values: Any) -> dict[str, Any]:
@@ -22,13 +23,17 @@ def response(answer: str, intent: str, **values: Any) -> dict[str, Any]:
     }
 
 
-def present_tool_result(name: str, result: ToolResult) -> dict[str, Any]:
+def present_tool_result(
+    name: str,
+    result: ToolResult,
+    requirements: tuple[AnswerRequirement, ...] = (),
+) -> dict[str, Any]:
     payload = result.model_dump(mode="json")
     if payload["type"] == "knowledge":
         return _present_knowledge(name, payload)
     if payload["type"] == "availability":
         return _present_availability(name, payload)
-    return _present_standard(name, payload)
+    return _present_standard(name, payload, requirements)
 
 
 def _present_knowledge(name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -79,20 +84,21 @@ def _present_availability(name: str, payload: dict[str, Any]) -> dict[str, Any]:
         )
     shown = len(payload["items"])
     suffix = "" if payload["total"] == shown else f" Mostrei as {shown} primeiras opções."
+    operation = "remarcar" if payload.get("reschedule_appointment_id") else "agendar"
     return response(
-        f"Há horários disponíveis para {day}{period}.{suffix} Qual opção combina melhor com você?",
+        f"Há horários disponíveis para {day}{period}.{suffix} Qual opção você prefere para {operation}?",
         name,
         tool_result=payload,
     )
 
 
-def _present_standard(name: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _present_standard(
+    name: str,
+    payload: dict[str, Any],
+    requirements: tuple[AnswerRequirement, ...] = (),
+) -> dict[str, Any]:
     if payload["type"] == "directory":
-        answer = (
-            "Encontrei estes profissionais para você:"
-            if payload["items"]
-            else "Não encontrei um profissional com esses critérios. Quer tentar outra especialidade ou convênio?"
-        )
+        answer = _directory_answer(payload, requirements)
     elif payload["type"] in {"insurers", "exams", "specialties", "units"}:
         answer = (
             "Separei estas opções para você:"
@@ -109,7 +115,35 @@ def _present_standard(name: str, payload: dict[str, Any]) -> dict[str, Any]:
         answer = "Consulta agendada com sucesso."
     elif payload["type"] == "appointment_cancelled":
         answer = "Consulta cancelada com sucesso."
+    elif payload["type"] == "appointment_rescheduled":
+        answer = "Consulta remarcada com sucesso."
+    elif payload["type"] == "reschedule_started":
+        answer = "Encontrei a consulta. Para qual dia você gostaria de remarcar?"
     return response(answer, name, tool_result=payload)
+
+
+def _directory_answer(payload: dict[str, Any], requirements: tuple[AnswerRequirement, ...]) -> str:
+    items = payload["items"]
+    if not items:
+        return (
+            "Não encontrei um profissional com esses critérios. "
+            "Quer tentar outra especialidade ou convênio?"
+        )
+    specialties = list(dict.fromkeys(str(item["specialty"]) for item in items))
+    doctors = [str(item["name"]) for item in items]
+    insurers = list(
+        dict.fromkeys(str(insurer) for item in items for insurer in item.get("insurers", []))
+    )
+    count = len(doctors)
+    specialty_text = ", ".join(specialties)
+    doctor_label = "profissional" if count == 1 else "profissionais"
+    parts = [f"Sim, atendemos {specialty_text}."]
+    if not requirements or AnswerRequirement.PROFESSIONALS in requirements:
+        parts.append(f"Temos {count} {doctor_label}: {', '.join(doctors)}.")
+    if AnswerRequirement.INSURERS in requirements:
+        accepted = ", ".join(insurers) if insurers else "nenhum convênio cadastrado"
+        parts.append(f"Os convênios aceitos são {accepted}.")
+    return " ".join(parts)
 
 
 WEEKDAYS = (

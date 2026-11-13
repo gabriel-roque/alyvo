@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import re
-import unicodedata
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.modules.catalog.application.doctor_search import filter_doctors, recognized_entity_ids
 from app.modules.catalog.domain import CatalogKind
 from app.shared.application import ConflictError, NotFoundError, ValidationError
 from app.shared.infrastructure.models import (
@@ -92,20 +91,39 @@ class CatalogService:
                 uow.session, actor_id, kind.value, item.id, "archived", {"id": item.id}
             )
 
-    def list_doctors(self, query: str = "", include_inactive: bool = False) -> dict:
+    def list_doctors(
+        self,
+        query: str = "",
+        include_inactive: bool = False,
+        doctor_ids: list[str] | None = None,
+    ) -> dict:
         with self._factory() as uow:
             statement = select(Doctor)
             if not include_inactive:
                 statement = statement.where(Doctor.active.is_(True), Doctor.archived_at.is_(None))
             rows = uow.session.scalars(statement.order_by(Doctor.name)).all()
+            if doctor_ids:
+                selected = set(doctor_ids)
+                rows = [doctor for doctor in rows if doctor.id in selected]
             if query:
-                rows = [doctor for doctor in rows if self._matches_doctor_query(doctor, query)]
+                rows = filter_doctors(rows, query)
             return {
                 "items": [self._doctor_view(item) for item in rows],
                 "total": len(rows),
                 "page": 1,
                 "page_size": len(rows),
             }
+
+    def resolve_doctor_entities(self, query: str) -> dict[str, list[str]]:
+        """Resolve catalog-backed identifiers without trusting model-generated IDs."""
+
+        with self._factory() as uow:
+            doctors = list(
+                uow.session.scalars(
+                    select(Doctor).where(Doctor.active.is_(True), Doctor.archived_at.is_(None))
+                ).all()
+            )
+            return recognized_entity_ids(doctors, query)
 
     def create_doctor(self, payload: dict, actor_id: str) -> dict:
         with self._factory() as uow:
@@ -228,68 +246,6 @@ class CatalogService:
             "insurers": [item.name for item in doctor.insurers],
             "active": doctor.active,
         }
-
-    @staticmethod
-    def _matches_doctor_query(doctor: Doctor, query: str) -> bool:
-        query_tokens = CatalogService._search_tokens(query)
-        if not query_tokens:
-            return True
-        searchable = " ".join(
-            (
-                doctor.name,
-                doctor.specialty.name,
-                doctor.unit.name,
-                *(insurer.name for insurer in doctor.insurers),
-            )
-        )
-        searchable_tokens = CatalogService._search_tokens(searchable, remove_stop_words=False)
-        return all(
-            any(
-                candidate.startswith(token) or token.startswith(candidate)
-                for candidate in searchable_tokens
-            )
-            for token in query_tokens
-        )
-
-    @staticmethod
-    def _search_tokens(value: str, *, remove_stop_words: bool = True) -> set[str]:
-        decomposed = unicodedata.normalize("NFKD", value.casefold())
-        plain = "".join(char for char in decomposed if not unicodedata.combining(char))
-        stop_words = {
-            "aceita",
-            "aceitam",
-            "atende",
-            "atendem",
-            "com",
-            "convenio",
-            "da",
-            "das",
-            "de",
-            "do",
-            "dos",
-            "doutor",
-            "doutora",
-            "dra",
-            "dr",
-            "encontrar",
-            "medico",
-            "medicos",
-            "plano",
-            "profissional",
-            "profissionais",
-            "qual",
-            "quais",
-            "saude",
-            "um",
-            "uma",
-            "unidade",
-        }
-        tokens = {
-            token[:8] if len(token) > 8 else token
-            for token in re.findall(r"[a-z0-9]+", plain)
-            if len(token) >= 3 and (not remove_stop_words or token not in stop_words)
-        }
-        return tokens
 
     @staticmethod
     def _record_change(

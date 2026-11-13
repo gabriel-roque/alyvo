@@ -104,3 +104,33 @@ def test_invalid_or_internal_llm_output_falls_back_to_safe_draft():
     result = composer.compose(request())
 
     assert result["answer"] == request().draft["answer"]
+
+
+def test_directory_composition_cannot_drop_a_compound_answer_obligation():
+    draft = {
+        "answer": (
+            "Sim, atendemos Cardiologia. Temos 1 profissional: Dra. Marina Costa. "
+            "Os convênios aceitos são UNIMED e Vida+."
+        ),
+        "intent": "search_directory",
+        "citations": [],
+    }
+    tool_result = {
+        "type": "directory",
+        "total": 1,
+        "items": [
+            {
+                "name": "Dra. Marina Costa",
+                "specialty": "Cardiologia",
+                "insurers": ["UNIMED", "Vida+"],
+            }
+        ],
+    }
+    composer = LlmResponseComposer(
+        FakeGenerator("Sim, atendemos Cardiologia com a Dra. Marina Costa."),
+        "Clínica Alyvo",
+    )
+
+    result = composer.compose(request(draft=draft, tool_result=tool_result))
+
+    assert result["answer"] == draft["answer"]

@@ -52,6 +52,21 @@ Abra `http://localhost:3000/chat`, inicie uma conversa nova para cada caso e use
 
 **Resultado esperado:** priorizar a busca de médicos, aplicar os termos de especialidade e convênio e devolver a Dra. Marina Costa com o seed atual. Não deve responder apenas com a lista genérica de convênios.
 
+<!-- validated-prompt {"id":"doctor-compound-answer","prompt":"Boa noite, gostaria de saber se atendem cardiologia, se sim, quais médicos e quais planos de saúde estão atendendo?","domain":"directory","action":"search","topic":"doctor","plan":"tool","tool":"search_directory","anonymous_gate":"execute"} -->
+### Pergunta composta sobre especialidade, médicos e convênios
+
+> **Prompt:** Boa noite, gostaria de saber se atendem cardiologia, se sim, quais médicos e quais planos de saúde estão atendendo?
+
+**Resultado esperado:** responder às três obrigações na mesma mensagem: confirmar que a clínica atende Cardiologia, informar a quantidade e os nomes dos profissionais encontrados e listar os convênios vinculados a esses profissionais. Com o seed atual, a resposta deve mencionar **Dra. Marina Costa**, **UNIMED** e **Vida+**. Palavras de cortesia não podem virar filtros da pesquisa.
+
+### Continuação usando o contexto do resultado anterior
+
+> **Turno 1:** Quais médicos atendem Cardiologia?
+>
+> **Turno 2:** E quais planos eles atendem?
+
+**Resultado esperado:** o segundo turno deve reutilizar os identificadores dos profissionais retornados no primeiro, sem depender de repetir “Cardiologia”. A resposta deve permanecer restrita à Dra. Marina Costa e informar UNIMED e Vida+.
+
 <!-- validated-prompt {"id":"insurers","prompt":"Quais convênios vocês aceitam?","domain":"directory","action":"list","topic":"insurer","plan":"tool","tool":"list_insurers","anonymous_gate":"execute"} -->
 ### Convênios
 
@@ -96,19 +111,19 @@ Abra `http://localhost:3000/chat`, inicie uma conversa nova para cada caso e use
 
 **Resultado esperado:** executar `search_availability` com a data calculada para a próxima sexta-feira e `period: afternoon`. Renderizar até oito horários reais; cada horário deve oferecer a ação **Agendar**. Se não houver vagas, retornar uma lista vazia sem inventar horários.
 
-<!-- validated-prompt {"id":"availability-doctor-days-unsupported","prompt":"Quais são os dias disponíveis da Dra. Marina Costa?","domain":"fallback","action":"clarify","topic":"unknown","plan":"clarification"} -->
+<!-- validated-prompt {"id":"availability-doctor-days","prompt":"Quais são os dias disponíveis da Dra. Marina Costa?","domain":"scheduling","action":"search","topic":"availability","plan":"clarification"} -->
 ### Perguntar dias disponíveis de um médico
 
 > **Prompt:** Quais são os dias disponíveis da Dra. Marina Costa?
 
-**Resultado esperado atual:** cair na clarificação genérica e perguntar se o usuário procura informações da clínica, um médico ou um horário. A expressão “dias disponíveis” ainda não é reconhecida como disponibilidade. Este é um teste de regressão de uma limitação conhecida e deve ser atualizado quando esse vocabulário passar a ser suportado.
+**Resultado esperado:** resolver “Dra. Marina Costa” contra o cadastro real, preservar seu `doctor_id` no contexto e perguntar a data desejada. Após o paciente informar a data, a consulta de disponibilidade deve ficar restrita à médica, sem depender de repetir o nome.
 
 <!-- validated-prompt {"id":"availability-doctor-missing-date","prompt":"Quais são os horários disponíveis da Dra. Marina Costa?","domain":"scheduling","action":"search","topic":"availability","plan":"clarification"} -->
 ### Perguntar horários de um médico sem informar a data
 
 > **Prompt:** Quais são os horários disponíveis da Dra. Marina Costa?
 
-**Resultado esperado atual:** perguntar para qual dia consultar a agenda. A versão atual reconhece “horários”, mas não converte o nome informado em `doctor_id`; portanto, mesmo após informar uma data, a busca não fica restrita à Dra. Marina. Este caso deve ser atualizado quando a resolução de médico por nome for implementada.
+**Resultado esperado:** perguntar para qual dia consultar a agenda e preservar o `doctor_id` resolvido da Dra. Marina. No turno seguinte, executar `search_availability` restrito à médica informada.
 
 <!-- validated-prompt {"id":"greeting-with-availability","prompt":"Bom dia, quero horários para a próxima sexta-feira.","domain":"scheduling","action":"search","topic":"availability","plan":"tool","tool":"search_availability","anonymous_gate":"execute"} -->
 ### Saudação junto com pedido operacional
@@ -131,15 +146,32 @@ Abra `http://localhost:3000/chat`, inicie uma conversa nova para cada caso e use
 
 **Resultado esperado:** solicitar autenticação, listar as consultas do paciente e exibir **Cancelar** somente nas consultas confirmadas. O prompt não cancela nada sozinho.
 
-### Concluir criação ou cancelamento
+<!-- validated-prompt {"id":"reschedule-appointment","prompt":"Desculpa, falei o dia errado. Tem como remarcar minha consulta?","domain":"scheduling","action":"reschedule","topic":"own_appointment","plan":"tool","tool":"list_my_appointments","anonymous_gate":"authenticate"} -->
+### Iniciar uma remarcação por correção
 
-Depois de uma busca de horários, clicar em **Agendar** prepara `create_appointment`. Depois de listar as próprias consultas, clicar em **Cancelar** prepara `cancel_appointment`.
+> **Prompt:** Desculpa, falei o dia errado. Tem como remarcar minha consulta?
+
+**Resultado esperado:** entender a correção como pedido de remarcação, solicitar autenticação e listar somente as consultas do paciente. Após selecionar **Remarcar**, perguntar a nova data, consultar a agenda do mesmo médico e carregar o identificador da consulta até a confirmação final.
+
+### Concluir criação, cancelamento ou remarcação
+
+Depois de uma busca de horários, clicar em **Agendar** prepara `create_appointment`. Depois de listar as próprias consultas, **Cancelar** prepara `cancel_appointment` e **Remarcar** inicia a coleta segura de uma nova data.
 
 <!-- validated-action {"id":"create-appointment","tool":"create_appointment","anonymous_gate":"authenticate","authenticated_gate":"confirm"} -->
 - **Criação:** exigir paciente autenticado, mostrar um resumo e pedir confirmação explícita. Somente depois de **Confirmar** deve criar a consulta e retornar `appointment_created`. Repetições não podem gerar duplicidade silenciosa.
 
 <!-- validated-action {"id":"cancel-appointment-action","tool":"cancel_appointment","anonymous_gate":"authenticate","authenticated_gate":"confirm"} -->
 - **Cancelamento:** exigir paciente autenticado, mostrar um resumo e pedir confirmação explícita. Somente depois de **Confirmar** deve cancelar e retornar `appointment_cancelled`. Se o usuário voltar, responder “Operação cancelada” sem alterar a consulta.
+
+<!-- validated-action {"id":"start-reschedule","tool":"start_reschedule","anonymous_gate":"authenticate","authenticated_gate":"execute"} -->
+- **Seleção para remarcação:** exigir autenticação, validar que a consulta pertence ao paciente e que está confirmada, armazenar apenas os identificadores necessários no contexto e perguntar a nova data.
+
+<!-- validated-action {"id":"reschedule-appointment-action","tool":"reschedule_appointment","anonymous_gate":"authenticate","authenticated_gate":"confirm"} -->
+- **Remarcação:** exigir paciente autenticado e confirmação explícita. A nova vaga deve pertencer ao mesmo médico, a consulta deve continuar pertencendo ao paciente e o resultado deve ser `appointment_rescheduled`.
+
+### Orientação automática após agendamento ou remarcação
+
+Quando uma criação ou remarcação for confirmada, a assistente deve consultar orientações publicadas aplicáveis ao médico ou à unidade. Havendo evidência específica, deve anexar a orientação e a fonte à mesma resposta. Sem evidência aplicável, deve confirmar a operação sem inventar instruções.
 
 ## Conhecimento institucional
 

@@ -15,8 +15,11 @@ from app.agent.tools.models import (
     InsurersResult,
     KnowledgeArguments,
     KnowledgeResult,
+    RescheduleAppointmentArguments,
+    RescheduleStartedResult,
     SearchDirectoryArguments,
     SpecialtiesResult,
+    StartRescheduleArguments,
     ToolArguments,
     UnitsResult,
 )
@@ -51,7 +54,7 @@ class DirectoryHandler:
     arguments_model = SearchDirectoryArguments
 
     def execute(self, arguments: SearchDirectoryArguments, actor: Actor | None):
-        result = CatalogService().list_doctors(arguments.query)
+        result = CatalogService().list_doctors(arguments.query, doctor_ids=arguments.doctor_ids)
         return DirectoryResult(items=result["items"], total=result["total"])
 
 
@@ -75,6 +78,7 @@ class AvailabilityHandler:
             requested_from=arguments.from_date,
             requested_to=arguments.to_date or arguments.from_date,
             period=arguments.period,
+            reschedule_appointment_id=arguments.reschedule_appointment_id,
         )
 
 
@@ -135,7 +139,29 @@ class CancelAppointmentHandler:
         return AppointmentResult(type="appointment_cancelled", appointment=item)
 
 
-def tool_specs() -> tuple[ToolSpec, ...]:
+class StartRescheduleHandler:
+    arguments_model = StartRescheduleArguments
+
+    def execute(self, arguments: StartRescheduleArguments, actor: Actor | None):
+        if actor is None:
+            raise AuthenticationRequiredError("Identificação necessária")
+        item = SchedulingService().get_mine(actor, arguments.appointment_id)
+        return RescheduleStartedResult(appointment=item)
+
+
+class RescheduleAppointmentHandler:
+    arguments_model = RescheduleAppointmentArguments
+
+    def execute(self, arguments: RescheduleAppointmentArguments, actor: Actor | None):
+        if actor is None:
+            raise AuthenticationRequiredError("Identificação necessária")
+        from app.agent.tools.models import AppointmentResult
+
+        item = SchedulingService().reschedule(actor, arguments.appointment_id, arguments.starts_at)
+        return AppointmentResult(type="appointment_rescheduled", appointment=item)
+
+
+def _catalog_tool_specs() -> tuple[ToolSpec, ...]:
     return (
         ToolSpec(
             "list_insurers",
@@ -168,6 +194,11 @@ def tool_specs() -> tuple[ToolSpec, ...]:
         ToolSpec(
             "search_knowledge", "Pesquisa conhecimento aprovado.", ToolRisk.READ, KnowledgeHandler()
         ),
+    )
+
+
+def _scheduling_tool_specs() -> tuple[ToolSpec, ...]:
+    return (
         ToolSpec(
             "list_my_appointments",
             "Lista consultas do paciente.",
@@ -194,4 +225,25 @@ def tool_specs() -> tuple[ToolSpec, ...]:
             True,
             audit=True,
         ),
+        ToolSpec(
+            "start_reschedule",
+            "Inicia o reagendamento de uma consulta do paciente.",
+            ToolRisk.SENSITIVE,
+            StartRescheduleHandler(),
+            True,
+            audit=True,
+        ),
+        ToolSpec(
+            "reschedule_appointment",
+            "Altera a data e o horário de uma consulta.",
+            ToolRisk.WRITE,
+            RescheduleAppointmentHandler(),
+            True,
+            True,
+            audit=True,
+        ),
     )
+
+
+def tool_specs() -> tuple[ToolSpec, ...]:
+    return (*_catalog_tool_specs(), *_scheduling_tool_specs())

@@ -5153,6 +5153,12 @@
               },
               {
                 "$ref": "#/components/schemas/CancelAppointmentArguments"
+              },
+              {
+                "$ref": "#/components/schemas/StartRescheduleArguments"
+              },
+              {
+                "$ref": "#/components/schemas/RescheduleAppointmentArguments"
               }
             ],
             "title": "Arguments"
@@ -5273,7 +5279,8 @@
             "type": "string",
             "enum": [
               "appointment_created",
-              "appointment_cancelled"
+              "appointment_cancelled",
+              "appointment_rescheduled"
             ],
             "title": "Type"
           },
@@ -5506,6 +5513,17 @@
               }
             ],
             "title": "Period"
+          },
+          "reschedule_appointment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reschedule Appointment Id"
           }
         },
         "additionalProperties": false,
@@ -5715,6 +5733,17 @@
               }
             ],
             "title": "Period"
+          },
+          "reschedule_appointment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reschedule Appointment Id"
           }
         },
         "additionalProperties": false,
@@ -6171,6 +6200,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/AppointmentResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RescheduleStartedResult"
                   }
                 ],
                 "discriminator": {
@@ -6178,12 +6210,14 @@
                   "mapping": {
                     "appointment_cancelled": "#/components/schemas/AppointmentResult",
                     "appointment_created": "#/components/schemas/AppointmentResult",
+                    "appointment_rescheduled": "#/components/schemas/AppointmentResult",
                     "appointments": "#/components/schemas/AppointmentsResult",
                     "availability": "#/components/schemas/AvailabilityResult",
                     "directory": "#/components/schemas/DirectoryResult",
                     "exams": "#/components/schemas/ExamsResult",
                     "insurers": "#/components/schemas/InsurersResult",
                     "knowledge": "#/components/schemas/KnowledgeResult",
+                    "reschedule_started": "#/components/schemas/RescheduleStartedResult",
                     "specialties": "#/components/schemas/SpecialtiesResult",
                     "units": "#/components/schemas/UnitsResult"
                   }
@@ -7321,6 +7355,12 @@
               },
               {
                 "$ref": "#/components/schemas/CancelAppointmentArguments"
+              },
+              {
+                "$ref": "#/components/schemas/StartRescheduleArguments"
+              },
+              {
+                "$ref": "#/components/schemas/RescheduleAppointmentArguments"
               }
             ],
             "title": "Arguments"
@@ -7372,12 +7412,59 @@
         ],
         "title": "ReadinessResponse"
       },
+      "RescheduleAppointmentArguments": {
+        "properties": {
+          "appointment_id": {
+            "type": "string",
+            "title": "Appointment Id"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Starts At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "appointment_id",
+          "starts_at"
+        ],
+        "title": "RescheduleAppointmentArguments"
+      },
+      "RescheduleStartedResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "reschedule_started",
+            "title": "Type",
+            "default": "reschedule_started"
+          },
+          "appointment": {
+            "$ref": "#/components/schemas/AppointmentItem"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "appointment"
+        ],
+        "title": "RescheduleStartedResult"
+      },
       "SearchDirectoryArguments": {
         "properties": {
           "query": {
             "type": "string",
             "title": "Query",
             "default": ""
+          },
+          "doctor_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Doctor Ids"
           }
         },
         "additionalProperties": false,
@@ -7535,6 +7622,20 @@
           "password"
         ],
         "title": "StaffLogin"
+      },
+      "StartRescheduleArguments": {
+        "properties": {
+          "appointment_id": {
+            "type": "string",
+            "title": "Appointment Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "appointment_id"
+        ],
+        "title": "StartRescheduleArguments"
       },
       "Suggestion": {
         "properties": {

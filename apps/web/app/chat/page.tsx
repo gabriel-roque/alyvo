@@ -122,7 +122,10 @@ export default function ChatPage() {
 
   async function action(
     tool: string,
-    arguments_: { doctor_id: string; starts_at: string; reason: string } | { appointment_id: string },
+    arguments_:
+      | { doctor_id: string; starts_at: string; reason: string }
+      | { appointment_id: string }
+      | { appointment_id: string; starts_at: string },
   ) {
     setLoading(true);
     setNotice("");

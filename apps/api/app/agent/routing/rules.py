@@ -134,6 +134,22 @@ class PatientRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         text = normalize(message)
         if any(
+            term in text
+            for term in (
+                "remarcar",
+                "reagendar",
+                "trocar a data",
+                "mudar a data",
+                "dia errado",
+            )
+        ):
+            return decision(
+                Domain.SCHEDULING,
+                Action.RESCHEDULE,
+                Topic.OWN_APPOINTMENT,
+                risk=RiskLevel.SENSITIVE,
+            )
+        if any(
             term in text for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")
         ):
             return decision(
@@ -174,9 +190,10 @@ class OperationalHoursRule:
 class SchedulingRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         text = normalize(message)
-        if any(
-            term in text for term in ("agendar", "marcar", "horario", "disponibilidade", "agenda")
-        ):
+        scheduling_request = any(
+            term in text for term in ("agendar", "marcar", "horario", "agenda")
+        ) or ("disponiv" in text and any(term in text for term in ("dia", "data", "hora")))
+        if scheduling_request:
             return decision(Domain.SCHEDULING, Action.SEARCH, Topic.AVAILABILITY)
         date_follow_up = (
             "hoje",
@@ -203,7 +220,7 @@ class DirectoryRule:
         ):
             secondary = (
                 [Topic.INSURER]
-                if any(term in text for term in ("convenio", "plano de saude"))
+                if any(term in text for term in ("convenio", "convenios", "plano", "planos"))
                 else []
             )
             return decision(
@@ -212,7 +229,7 @@ class DirectoryRule:
                 Topic.DOCTOR,
                 secondary_topics=secondary,
             )
-        if any(term in text for term in ("convenio", "plano de saude")):
+        if any(term in text for term in ("convenio", "convenios", "plano", "planos")):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.INSURER)
         if "especialidad" in text:
             return decision(Domain.DIRECTORY, Action.LIST, Topic.SPECIALTY)

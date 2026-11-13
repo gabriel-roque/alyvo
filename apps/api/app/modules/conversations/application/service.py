@@ -12,6 +12,7 @@ from app.agent.conversation import ConversationContext, ConversationTurn
 from app.agent.orchestration import AgentOrchestrator
 from app.agent.presentation import response
 from app.agent.tools import ToolGate, ToolInvocationPolicy, build_tool_registry
+from app.agent.tools.models import AppointmentResult, RescheduleStartedResult, ToolResult
 from app.agent.tools.registry import ToolSpec
 from app.modules.identity.domain import Actor
 from app.shared.application import (
@@ -84,7 +85,8 @@ class ConversationService:
         actor: Actor | None,
     ) -> JsonObject:
         with self._factory() as uow:
-            self._session(uow.session, session_id)
+            session = self._session(uow.session, session_id)
+            context = ConversationContext.model_validate(session.context_json or {})
         try:
             spec = self._tools.get(tool_name)
         except KeyError as exc:
@@ -106,7 +108,12 @@ class ConversationService:
                 session_id, spec, parsed.model_dump(mode="json"), actor
             )
         result = spec.handler.execute(parsed, actor)
-        return self._save_response(session_id, self._agent.present_result(tool_name, result))
+        context = self._context_after_tool(context, result)
+        return self._save_response(
+            session_id,
+            self._agent.present_result(tool_name, result),
+            context,
+        )
 
     def confirm(
         self, session_id: str, confirmation_id: str, accepted: bool, actor: Actor
@@ -143,7 +150,11 @@ class ConversationService:
             )
             if execution:
                 execution.status, execution.result_json = ToolExecutionStatus.succeeded, response
-        return self._save_response(session_id, response)
+            session = self._session(uow.session, session_id)
+            context = self._context_after_tool(
+                ConversationContext.model_validate(session.context_json or {}), result
+            )
+        return self._save_response(session_id, response, context)
 
     def _prepare_confirmation(
         self,
@@ -232,3 +243,14 @@ class ConversationService:
     @staticmethod
     def _base(answer: str, intent: str, **values: object) -> JsonObject:
         return response(answer, intent, **values)
+
+    @staticmethod
+    def _context_after_tool(
+        context: ConversationContext, result: ToolResult
+    ) -> ConversationContext:
+        if isinstance(result, RescheduleStartedResult):
+            appointment = result.appointment
+            return context.with_pending_reschedule(appointment.id, appointment.doctor_id)
+        if isinstance(result, AppointmentResult) and result.type == "appointment_rescheduled":
+            return context.complete_reschedule()
+        return context

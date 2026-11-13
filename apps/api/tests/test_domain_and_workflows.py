@@ -238,3 +238,77 @@ def test_directory_understands_specialty_and_insurer_in_natural_language(client)
 
     assert response.status_code == 200
     assert [doctor["name"] for doctor in response.json()["items"]] == ["Dra. Marina Costa"]
+
+
+def test_patient_can_correct_the_date_and_reschedule_through_chat(client, patient_token):
+    headers = {"Authorization": f"Bearer {patient_token}"}
+    doctor = client.get("/api/v1/directory/doctors", params={"q": "Cardiologia"}).json()["items"][0]
+    target = (datetime.now(timezone.utc) + timedelta(days=10)).date()
+    while target.weekday() > 4:
+        target += timedelta(days=1)
+    availability = client.get(
+        "/api/v1/appointments/availability",
+        params={"from_date": target.isoformat(), "doctor_id": doctor["id"]},
+    ).json()["items"]
+    assert availability
+    created = client.post(
+        "/api/v1/appointments",
+        headers=headers,
+        json={
+            "doctor_id": doctor["id"],
+            "starts_at": availability[0]["starts_at"],
+            "reason": "Consulta para remarcação",
+        },
+    )
+    assert created.status_code == 201
+    appointment_id = created.json()["id"]
+
+    session_id = client.post("/api/v1/chat/sessions", headers=headers).json()["id"]
+    request = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        headers=headers,
+        json={"content": "Desculpa, falei o dia errado. Tem como remarcar?"},
+    )
+    assert request.status_code == 200
+    assert request.json()["intent"] == "list_my_appointments"
+
+    selected = client.post(
+        f"/api/v1/chat/sessions/{session_id}/actions",
+        headers=headers,
+        json={"tool": "start_reschedule", "arguments": {"appointment_id": appointment_id}},
+    )
+    assert selected.status_code == 200
+    assert selected.json()["tool_result"]["type"] == "reschedule_started"
+
+    new_target = target + timedelta(days=7)
+    options = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        headers=headers,
+        json={"content": f"Quero remarcar para {new_target.isoformat()}"},
+    )
+    assert options.status_code == 200
+    result = options.json()["tool_result"]
+    assert result["type"] == "availability"
+    assert result["reschedule_appointment_id"] == appointment_id
+    assert result["items"]
+
+    prepared = client.post(
+        f"/api/v1/chat/sessions/{session_id}/actions",
+        headers=headers,
+        json={
+            "tool": "reschedule_appointment",
+            "arguments": {
+                "appointment_id": appointment_id,
+                "starts_at": result["items"][0]["starts_at"],
+            },
+        },
+    )
+    assert prepared.status_code == 200
+    confirmation_id = prepared.json()["confirmation_request"]["id"]
+    confirmed = client.post(
+        f"/api/v1/chat/sessions/{session_id}/confirmations/{confirmation_id}",
+        headers=headers,
+        json={"accepted": True},
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["tool_result"]["type"] == "appointment_rescheduled"
