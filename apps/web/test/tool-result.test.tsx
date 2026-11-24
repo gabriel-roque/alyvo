@@ -37,6 +37,7 @@ describe("ToolResultRenderer", () => {
       requested_from: "2030-01-10",
       requested_to: "2030-01-10",
       period: null,
+      reschedule_appointment_id: null,
       items: [{
         id: "slot-1",
         starts_at: "2030-01-10T12:00:00Z",
@@ -63,9 +64,11 @@ describe("ToolResultRenderer", () => {
     }} onAction={onAction} />);
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(onAction).toHaveBeenCalledWith("cancel_appointment", { appointment_id: "a1" });
+    fireEvent.click(screen.getByRole("button", { name: "Remarcar" }));
+    expect(onAction).toHaveBeenCalledWith("start_reschedule", { appointment_id: "a1" });
   });
 
-  it.each(["appointment_created", "appointment_cancelled"] as const)("renders %s", (type) => {
+  it.each(["appointment_created", "appointment_cancelled", "appointment_rescheduled"] as const)("renders %s", (type) => {
     render(<ToolResultRenderer result={{
       type,
       appointment: {

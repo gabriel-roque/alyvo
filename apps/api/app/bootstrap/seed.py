@@ -106,7 +106,12 @@ def _create_rules(session: Session, doctors, units) -> None:
 def _create_knowledge(session: Session, settings: Settings):
     document = KnowledgeDocument(
         title="Guia institucional Alyvo",
-        content="A clínica atende de segunda a sexta, das 8h às 18h. Resultados de hemograma ficam disponíveis em até dois dias úteis.",
+        content=(
+            "A clínica atende de segunda a sexta, das 8h às 18h. "
+            "Os documentos que você deve levar para realizar exames são: documento de "
+            "identificação com foto, pedido médico e carteirinha do convênio. Resultados de "
+            "hemograma ficam disponíveis em até dois dias úteis."
+        ),
         status=DocumentStatus.published,
         source="Base institucional",
     )

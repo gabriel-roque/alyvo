@@ -8,7 +8,8 @@ python packages/contracts/generate.py
 npm run generate:contracts
 python scripts/validate-openapi.py
 python scripts/check-maintainability.py
-pytest apps/api/tests tests/integration
+pytest apps/api/tests tests/integration --cov --cov-fail-under=80
+coverage report --include='apps/api/app/modules/*' --fail-under=85
 ruff check apps/api apps/worker scripts tests
 ruff format --check apps/api apps/worker scripts tests
 mypy --no-incremental apps/api/app apps/worker/worker
@@ -33,7 +34,7 @@ report = {
     "status": "passed",
     "checks": [
         "infrastructure-health", "alembic", "seed", "api-unit",
-        "integration", "ruff", "ruff-format", "mypy", "architecture-boundaries",
+        "integration", "coverage", "domain-coverage", "ruff", "ruff-format", "mypy", "architecture-boundaries",
         "openapi", "maintainability", "web-unit", "vitest",
         "react-testing-library", "typescript", "eslint", "docusaurus-build",
         "production-build", "playwright-four-viewports", "outbox", "knowledge-projection"

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from app.agent.conversation import ConversationTurn
 from app.agent.presentation import CompositionRequest, LlmResponseComposer
+from app.infrastructure.llm import _ollama_keep_alive
 
 
 @dataclass
@@ -14,6 +15,11 @@ class FakeGenerator:
     def generate(self, system: str, prompt: str) -> str | None:
         self.calls.append((system, prompt))
         return self.answer
+
+
+def test_ollama_forever_keep_alive_uses_api_sentinel():
+    assert _ollama_keep_alive("-1") == -1
+    assert _ollama_keep_alive("10m") == "10m"
 
 
 def request(**changes: object) -> CompositionRequest:
@@ -104,3 +110,73 @@ def test_invalid_or_internal_llm_output_falls_back_to_safe_draft():
     result = composer.compose(request())
 
     assert result["answer"] == request().draft["answer"]
+
+
+def test_directory_composition_cannot_drop_a_compound_answer_obligation():
+    draft = {
+        "answer": (
+            "Sim, atendemos Cardiologia. Temos 1 profissional: Dra. Marina Costa. "
+            "Os convênios aceitos são UNIMED e Vida+."
+        ),
+        "intent": "search_directory",
+        "citations": [],
+    }
+    tool_result = {
+        "type": "directory",
+        "total": 1,
+        "items": [
+            {
+                "name": "Dra. Marina Costa",
+                "specialty": "Cardiologia",
+                "insurers": ["UNIMED", "Vida+"],
+            }
+        ],
+    }
+    composer = LlmResponseComposer(
+        FakeGenerator("Sim, atendemos Cardiologia com a Dra. Marina Costa."),
+        "Clínica Alyvo",
+    )
+
+    result = composer.compose(request(draft=draft, tool_result=tool_result))
+
+    assert result["answer"] == draft["answer"]
+
+
+def test_availability_composition_cannot_hide_a_returned_doctor():
+    draft = {
+        "answer": "Há horários disponíveis. Qual opção você prefere?",
+        "intent": "search_availability",
+        "citations": [],
+    }
+    tool_result = {
+        "type": "availability",
+        "items": [
+            {"doctor": {"name": "Dra. Marina Costa"}},
+            {"doctor": {"name": "Dr. Paulo Lima"}},
+        ],
+    }
+    composer = LlmResponseComposer(
+        FakeGenerator("Encontrei horários com a Dra. Marina Costa."),
+        "Clínica Alyvo",
+    )
+
+    result = composer.compose(request(draft=draft, tool_result=tool_result))
+
+    assert result["answer"] == draft["answer"]
+
+
+def test_availability_composition_cannot_invent_slots_for_an_empty_result():
+    draft = {
+        "answer": "Não encontrei horários disponíveis para essa data.",
+        "intent": "search_availability",
+        "citations": [],
+    }
+    tool_result = {"type": "availability", "items": []}
+    composer = LlmResponseComposer(
+        FakeGenerator("Há um horário disponível às 9h."),
+        "Clínica Alyvo",
+    )
+
+    result = composer.compose(request(draft=draft, tool_result=tool_result))
+
+    assert result["answer"] == draft["answer"]

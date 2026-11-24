@@ -1,3 +1,5 @@
+![Alyvo — Assistente Administrativo para Clínicas](assets/alyvo-repository-cover.png)
+
 # Alyvo
 
 Assistente administrativo single-clinic para diretório médico, agenda, atendimento conversacional e conhecimento institucional. O backend é um monólito modular FastAPI; o frontend usa Next.js; processamento assíncrono usa Celery, outbox e projeção Neo4j.

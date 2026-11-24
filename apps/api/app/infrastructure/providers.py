@@ -253,9 +253,11 @@ def hybrid_knowledge_search(question: str, limit: int = 5) -> list[KnowledgeHit]
                     question,
                     f"{row['title']} {row['content']}",
                 )
-                lexical_score = 0.86 * lexical_strength if lexical_strength >= 0.5 else 0
-                semantic_score = (
-                    vector_score if vector_score >= settings.knowledge_vector_min_score else 0
+                lexical_score = 0.86 * lexical_strength if lexical_strength >= 0.7 else 0
+                semantic_score = _qualified_semantic_score(
+                    vector_score,
+                    lexical_strength,
+                    settings.knowledge_vector_min_score,
                 )
                 relevance = max(lexical_score, semantic_score)
                 if relevance <= 0:
@@ -290,6 +292,17 @@ def _lexical_strength(question: str, content: str) -> float:
     return matches / len(question_terms)
 
 
+def _qualified_semantic_score(
+    vector_score: float, lexical_strength: float, minimum_score: float
+) -> float:
+    if vector_score < minimum_score:
+        return 0
+    strong_semantic_threshold = max(0.9, minimum_score + 0.12)
+    if lexical_strength >= 0.7 or vector_score >= strong_semantic_threshold:
+        return vector_score
+    return 0
+
+
 def _same_term(left: str, right: str) -> bool:
     if left == right:
         return True
@@ -304,6 +317,7 @@ def _search_terms(value: str) -> set[str]:
     stop_words = {
         "aos",
         "como",
+        "clinica",
         "da",
         "das",
         "de",
@@ -316,6 +330,8 @@ def _search_terms(value: str) -> set[str]:
         "qual",
         "quais",
         "que",
+        "possui",
+        "tem",
         "uma",
         "voces",
     }

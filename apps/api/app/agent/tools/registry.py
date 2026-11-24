@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.agent.tools.models import ToolArguments, ToolResult
 from app.modules.identity.domain import Actor
@@ -15,9 +15,10 @@ class ToolRisk(StrEnum):
 
 
 class ToolHandler(Protocol):
-    arguments_model: type[ToolArguments]
+    @property
+    def arguments_model(self) -> type[ToolArguments]: ...
 
-    def execute(self, arguments: ToolArguments, actor: Actor | None) -> ToolResult: ...
+    def execute(self, arguments: Any, actor: Actor | None) -> ToolResult: ...
 
 
 @dataclass(frozen=True)

@@ -3,12 +3,14 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
+from app.agent.conversation import ConversationTurn
 from app.agent.presentation import (
     DeterministicResponseComposer,
     LlmResponseComposer,
     ResponseComposer,
 )
 from app.agent.routing import RouteDecision
+from app.agent.understanding import TurnUnderstanding
 from app.bootstrap.config import Settings, get_settings
 
 
@@ -42,6 +44,33 @@ class LlmRoutingClassifier:
         if "ollama" in {settings.llm_primary_provider, settings.llm_fallback_provider}:
             return _ollama_model(settings, temperature=0)
         return None
+
+
+class LlmTurnInterpreter:
+    """Extracts a structured multi-intent turn; it never executes a capability."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    def __call__(
+        self, message: str, history: tuple[ConversationTurn, ...]
+    ) -> TurnUnderstanding | None:
+        model = LlmRoutingClassifier(self.settings)._model()
+        if model is None:
+            return None
+        recent = "\n".join(f"{turn.role}: {turn.content}" for turn in history[-6:])
+        prompt = (
+            "Interprete a mensagem do paciente no schema. Uma mensagem pode exigir várias "
+            "respostas (por exemplo confirmar especialidade, listar profissionais e convênios). "
+            "Marque referência ao resultado anterior e correção quando existirem. Não invente "
+            "entidades, não execute ações e use reschedule para pedidos de remarcação.\n"
+            f"Histórico:\n{recent}\nMensagem atual: {message}"
+        )
+        try:
+            result = model.with_structured_output(TurnUnderstanding).invoke(prompt)
+            return result if isinstance(result, TurnUnderstanding) else None
+        except Exception:
+            return None
 
 
 class LangChainAnswerGenerator:
@@ -100,10 +129,16 @@ def _ollama_model(settings: Settings, temperature: float) -> Any:
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,
         temperature=temperature,
-        keep_alive=settings.ollama_keep_alive,
+        keep_alive=_ollama_keep_alive(settings.ollama_keep_alive),
         num_ctx=settings.ollama_context_length,
         num_predict=settings.llm_response_max_tokens,
     )
+
+
+def _ollama_keep_alive(value: str) -> str | int:
+    # Recent Ollama releases reject the string "-1" as a duration without a
+    # unit, but still accept the integer -1 sentinel for keeping a model loaded.
+    return -1 if value.strip() == "-1" else value
 
 
 @lru_cache
@@ -112,6 +147,14 @@ def routing_classifier() -> LlmRoutingClassifier | None:
     if settings.app_env in {"test", "studio"} or not settings.llm_routing_enabled:
         return None
     return LlmRoutingClassifier(settings)
+
+
+@lru_cache
+def turn_interpreter() -> LlmTurnInterpreter | None:
+    settings = get_settings()
+    if settings.app_env in {"test", "studio"} or not settings.llm_routing_enabled:
+        return None
+    return LlmTurnInterpreter(settings)
 
 
 @lru_cache

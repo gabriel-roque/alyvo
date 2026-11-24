@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.agent.conversation import AvailabilitySlots, ConversationContext
-from app.agent.orchestration.dates import extract_availability_slots
+from app.agent.conversation import ConversationContext
+from app.agent.planning.capabilities import CapabilityRegistry
 from app.agent.planning.models import ExecutionPlan, PlanKind, PlanStep
+from app.agent.planning.scheduling import (
+    build_appointment_selection_plan,
+    build_availability_plan,
+)
 from app.agent.presentation import response
 from app.agent.routing import Action, Domain, RiskLevel, RouteDecision, Topic
 from app.agent.routing.rules import normalize
@@ -12,6 +16,9 @@ from app.agent.routing.rules import normalize
 
 class DecisionPolicy:
     """Turns an interpretation into an auditable, deterministic execution plan."""
+
+    def __init__(self, capabilities: CapabilityRegistry | None = None) -> None:
+        self.capabilities = capabilities or CapabilityRegistry()
 
     def plan(
         self,
@@ -22,59 +29,34 @@ class DecisionPolicy:
     ) -> ExecutionPlan:
         direct = self._direct_response(route, message)
         if direct is not None:
-            next_context = context if route.domain == Domain.CONVERSATION else context.clear_topic()
+            keep_context = (
+                route.domain == Domain.CONVERSATION and route.reason != "declined pending question"
+            )
+            next_context = context if keep_context else context.clear_topic()
             return ExecutionPlan(
                 kind=self._direct_kind(route),
                 response=direct,
                 reason_codes=[f"direct:{route.domain}:{route.action}"],
                 context=next_context,
             )
+        if route.topic == Topic.AVAILABILITY and route.action == Action.CREATE:
+            return build_appointment_selection_plan(message, context)
         if route.topic == Topic.AVAILABILITY:
-            return self._availability_plan(message, context, today)
+            return build_availability_plan(message, context, today)
         return self._tool_or_rag_plan(route, message, context)
 
-    @staticmethod
-    def _availability_plan(
-        message: str, context: ConversationContext, today: date
-    ) -> ExecutionPlan:
-        text = normalize(message)
-        if any(term in text for term in ("outro dia", "outra data")):
-            context = context.model_copy(update={"availability": AvailabilitySlots()})
-        updated = context.with_availability(extract_availability_slots(message, today))
-        if updated.availability.from_date is None:
-            return ExecutionPlan(
-                kind=PlanKind.CLARIFICATION,
-                response=response(
-                    "Claro! Para qual dia você gostaria de consultar os horários?",
-                    "clarify_availability",
-                    suggestions=[
-                        {"label": "Amanhã", "message": "Quero horários para amanhã"},
-                        {
-                            "label": "Próxima sexta-feira",
-                            "message": "Quero horários na próxima sexta-feira",
-                        },
-                    ],
-                ),
-                reason_codes=["missing_slot:availability.date"],
-                context=updated,
-            )
-        return ExecutionPlan(
-            kind=PlanKind.TOOL,
-            steps=[
-                PlanStep(
-                    tool_name="search_availability",
-                    arguments=updated.availability.tool_arguments(),
-                )
-            ],
-            reason_codes=["authoritative_data:scheduling"],
-            context=updated.with_tool("search_availability"),
-        )
-
-    @staticmethod
     def _tool_or_rag_plan(
-        route: RouteDecision, message: str, context: ConversationContext
+        self, route: RouteDecision, message: str, context: ConversationContext
     ) -> ExecutionPlan:
-        tool_name, arguments = _tool_call(route, message)
+        capability = self.capabilities.resolve(route.domain, route.action, route.topic)
+        tool_name = capability.tool_name if capability else "search_knowledge"
+        arguments: dict[str, object] = {}
+        if tool_name == "search_directory":
+            arguments = {"query": message}
+            if route.source.value == "context" and context.directory.doctor_ids:
+                arguments["doctor_ids"] = context.directory.doctor_ids
+        elif tool_name == "search_knowledge":
+            arguments = {"query": message}
         kind = PlanKind.RAG if tool_name == "search_knowledge" else PlanKind.TOOL
         reason = "approved_documents" if kind == PlanKind.RAG else "authoritative_structured_data"
         return ExecutionPlan(
@@ -114,22 +96,6 @@ class DecisionPolicy:
         }
         answer = messages.get(route.action)
         return response(answer, "conversation") if answer else None
-
-
-def _tool_call(route: RouteDecision, message: str) -> tuple[str, dict[str, object]]:
-    topic_tools = {
-        Topic.INSURER: "list_insurers",
-        Topic.SPECIALTY: "list_specialties",
-        Topic.UNIT: "list_units",
-        Topic.EXAM: "list_exams",
-        Topic.DOCTOR: "search_directory",
-    }
-    if route.topic == Topic.OWN_APPOINTMENT:
-        return "list_my_appointments", {}
-    if route.topic in topic_tools:
-        arguments: dict[str, object] = {"query": message} if route.topic == Topic.DOCTOR else {}
-        return topic_tools[route.topic], arguments
-    return "search_knowledge", {"query": message}
 
 
 def _clinical_response(route: RouteDecision) -> dict[str, object]:

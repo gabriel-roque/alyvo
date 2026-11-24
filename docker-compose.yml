@@ -19,6 +19,8 @@ x-app-environment: &app-environment
   LLM_ROUTING_ENABLED: ${LLM_ROUTING_ENABLED:-false}
   LLM_RESPONSE_ENABLED: ${LLM_RESPONSE_ENABLED:-true}
   LLM_RESPONSE_MAX_TOKENS: ${LLM_RESPONSE_MAX_TOKENS:-260}
+  CONTEXTUAL_INTELLIGENCE_ENABLED: ${CONTEXTUAL_INTELLIGENCE_ENABLED:-true}
+  CONTEXTUAL_INTELLIGENCE_SHADOW_MODE: ${CONTEXTUAL_INTELLIGENCE_SHADOW_MODE:-false}
   ALLOW_EXTERNAL_PROVIDERS: ${ALLOW_EXTERNAL_PROVIDERS:-true}
   OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
   OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen3-8b}
@@ -335,6 +337,8 @@ services:
       API_URL: http://api:8000/api/v1
       WEB_URL: http://web:3000
       OLLAMA_URL: http://ollama:11434
+      MINIO_URL: http://minio:9000
+      STACK_DATABASE_URL: postgresql+psycopg://alyvo:alyvo@postgres:5432/alyvo
       DATABASE_URL: postgresql+psycopg://alyvo:alyvo@postgres:5432/alyvo
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j

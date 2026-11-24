@@ -56,9 +56,7 @@ def test_documented_catalog_covers_every_domain_and_registered_tool():
     assert {case["domain"] for case in prompts} == {domain.value for domain in Domain}
 
     registry = build_tool_registry()
-    documented_tools = {
-        case["tool"] for case in [*prompts, *actions] if case.get("tool")
-    }
+    documented_tools = {case["tool"] for case in [*prompts, *actions] if case.get("tool")}
     assert documented_tools == {spec.name for spec in registry.specs()}
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -82,7 +83,8 @@ class SafetyRule:
                 Domain.SECURITY, Action.REJECT, Topic.UNAUTHORIZED, risk=RiskLevel.SENSITIVE
             )
         urgent = ("dor no peito", "nao consigo respirar", "hemorragia", "convulsao", "emergencia")
-        if any(term in text for term in urgent):
+        chest_pain = re.search(r"\bdor\b(?:\s+\w+){0,3}\s+\bpeito\b", text)
+        if any(term in text for term in urgent) or chest_pain:
             return decision(
                 Domain.CLINICAL_SAFETY, Action.REJECT, Topic.CLINICAL, risk=RiskLevel.URGENT
             )
@@ -112,7 +114,7 @@ class SafetyRule:
 class ConversationRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         marker, remainder = split_conversation_marker(message)
-        if is_conversation_only(marker, remainder):
+        if marker is not None and is_conversation_only(marker, remainder):
             actions = {
                 ConversationMarker.GREETING: Action.GREET,
                 ConversationMarker.THANKS: Action.THANK,
@@ -133,6 +135,22 @@ class ConversationRule:
 class PatientRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         text = normalize(message)
+        if any(
+            term in text
+            for term in (
+                "remarcar",
+                "reagendar",
+                "trocar a data",
+                "mudar a data",
+                "dia errado",
+            )
+        ):
+            return decision(
+                Domain.SCHEDULING,
+                Action.RESCHEDULE,
+                Topic.OWN_APPOINTMENT,
+                risk=RiskLevel.SENSITIVE,
+            )
         if any(
             term in text for term in ("minhas consultas", "meus agendamentos", "consultas marcadas")
         ):
@@ -174,9 +192,10 @@ class OperationalHoursRule:
 class SchedulingRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         text = normalize(message)
-        if any(
-            term in text for term in ("agendar", "marcar", "horario", "disponibilidade", "agenda")
-        ):
+        scheduling_request = any(
+            term in text for term in ("agendar", "marcar", "horario", "agenda")
+        ) or ("disponiv" in text and any(term in text for term in ("dia", "data", "hora")))
+        if scheduling_request:
             return decision(Domain.SCHEDULING, Action.SEARCH, Topic.AVAILABILITY)
         date_follow_up = (
             "hoje",
@@ -203,7 +222,7 @@ class DirectoryRule:
         ):
             secondary = (
                 [Topic.INSURER]
-                if any(term in text for term in ("convenio", "plano de saude"))
+                if any(term in text for term in ("convenio", "convenios", "plano", "planos"))
                 else []
             )
             return decision(
@@ -212,13 +231,17 @@ class DirectoryRule:
                 Topic.DOCTOR,
                 secondary_topics=secondary,
             )
-        if any(term in text for term in ("convenio", "plano de saude")):
+        if any(term in text for term in ("convenio", "convenios", "plano", "planos")):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.INSURER)
         if "especialidad" in text:
             return decision(Domain.DIRECTORY, Action.LIST, Topic.SPECIALTY)
         if any(term in text for term in ("unidade", "endereco", "onde fica")):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.UNIT)
-        if any(term in text for term in ("exame", "procedimento", "hemograma")):
+        exam_terms = ("exame", "procedimento", "hemograma")
+        exam_guidance_terms = ("documento", "levar", "prazo", "preparo", "resultado")
+        if any(term in text for term in exam_terms) and not any(
+            term in text for term in exam_guidance_terms
+        ):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.EXAM)
         return None
 
@@ -232,6 +255,9 @@ class KnowledgeRule:
             "cancelamento",
             "preparo",
             "documento",
+            "resultado",
+            "estacionamento",
+            "acompanhante",
             "atendimento",
             "funcionamento",
             "lgpd",

@@ -131,9 +131,14 @@ class SchedulingService:
         reason: str | None = None,
     ) -> dict:
         with self._factory() as uow:
-            item = uow.session.get(Appointment, appointment_id)
+            statement = select(Appointment).where(Appointment.id == appointment_id)
+            if actor.role == UserRole.PATIENT:
+                statement = statement.where(Appointment.patient_id == actor.id)
+            item = uow.session.scalar(statement)
             if not item:
                 raise NotFoundError("Agendamento não encontrado")
+            if item.status != AppointmentStatus.confirmed:
+                raise ConflictError("Somente consultas confirmadas podem ser remarcadas")
             requested = SlotCalculator.to_utc(starts_at)
             self._lock(uow.session, item.doctor_id, requested)
             profile = uow.session.get(ClinicProfile, 1)
@@ -170,6 +175,22 @@ class SchedulingService:
                 "rescheduled",
             )
             self._audit(uow.session, actor.id, "appointment.rescheduled", item.id)
+            return self._appointment_view(uow.session, item)
+
+    def get_mine(self, actor: Actor, appointment_id: str) -> dict:
+        if actor.role != UserRole.PATIENT:
+            raise ForbiddenError("Acesso restrito ao paciente")
+        with self._factory() as uow:
+            item = uow.session.scalar(
+                select(Appointment).where(
+                    Appointment.id == appointment_id,
+                    Appointment.patient_id == actor.id,
+                )
+            )
+            if not item:
+                raise NotFoundError("Agendamento não encontrado")
+            if item.status != AppointmentStatus.confirmed:
+                raise ConflictError("Somente consultas confirmadas podem ser remarcadas")
             return self._appointment_view(uow.session, item)
 
     def list_mine(self, actor: Actor) -> dict:

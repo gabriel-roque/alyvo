@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.agent.presentation.knowledge import relevant_excerpt
+from app.agent.presentation.knowledge import is_safe_evidence, relevant_excerpt
 from app.agent.tools.models import (
     AppointmentsResult,
     AvailabilityArguments,
@@ -15,8 +15,11 @@ from app.agent.tools.models import (
     InsurersResult,
     KnowledgeArguments,
     KnowledgeResult,
+    RescheduleAppointmentArguments,
+    RescheduleStartedResult,
     SearchDirectoryArguments,
     SpecialtiesResult,
+    StartRescheduleArguments,
     ToolArguments,
     UnitsResult,
 )
@@ -51,7 +54,7 @@ class DirectoryHandler:
     arguments_model = SearchDirectoryArguments
 
     def execute(self, arguments: SearchDirectoryArguments, actor: Actor | None):
-        result = CatalogService().list_doctors(arguments.query)
+        result = CatalogService().list_doctors(arguments.query, doctor_ids=arguments.doctor_ids)
         return DirectoryResult(items=result["items"], total=result["total"])
 
 
@@ -59,22 +62,38 @@ class AvailabilityHandler:
     arguments_model = AvailabilityArguments
 
     def execute(self, arguments: AvailabilityArguments, actor: Actor | None):
-        result = SchedulingService().availability(
+        service = SchedulingService()
+        requested_to = arguments.to_date or arguments.from_date
+        result = service.availability(
             arguments.from_date,
-            arguments.to_date or arguments.from_date + timedelta(days=14),
+            requested_to,
             arguments.doctor_id,
             arguments.specialty_id,
             arguments.unit_id,
             arguments.insurer_id,
             arguments.period,
         )
+        alternatives: list[dict] = []
+        if not result["items"] and requested_to == arguments.from_date:
+            alternative_result = service.availability(
+                arguments.from_date + timedelta(days=1),
+                arguments.from_date + timedelta(days=14),
+                arguments.doctor_id,
+                arguments.specialty_id,
+                arguments.unit_id,
+                arguments.insurer_id,
+                arguments.period,
+            )
+            alternatives = alternative_result["items"][:8]
         return AvailabilityResult(
             items=result["items"][:8],
+            alternatives=alternatives,
             total=result["total"],
             timezone=result["timezone"],
             requested_from=arguments.from_date,
-            requested_to=arguments.to_date or arguments.from_date,
+            requested_to=requested_to,
             period=arguments.period,
+            reschedule_appointment_id=arguments.reschedule_appointment_id,
         )
 
 
@@ -100,12 +119,16 @@ class KnowledgeHandler:
             if source_key in seen_sources:
                 continue
             excerpt = relevant_excerpt(arguments.query, item.content)
-            if excerpt:
+            if excerpt and is_safe_evidence(excerpt):
                 citations.append({"title": item.title, "source": item.source, "excerpt": excerpt})
                 seen_sources.add(source_key)
             if len(citations) == 3:
                 break
-        confidence = result.confidence if result.answerability == Answerability.SUPPORTED else 0
+        confidence = (
+            result.confidence
+            if result.answerability == Answerability.SUPPORTED and citations
+            else 0
+        )
         return KnowledgeResult(query=arguments.query, citations=citations, confidence=confidence)
 
 
@@ -135,7 +158,29 @@ class CancelAppointmentHandler:
         return AppointmentResult(type="appointment_cancelled", appointment=item)
 
 
-def tool_specs() -> tuple[ToolSpec, ...]:
+class StartRescheduleHandler:
+    arguments_model = StartRescheduleArguments
+
+    def execute(self, arguments: StartRescheduleArguments, actor: Actor | None):
+        if actor is None:
+            raise AuthenticationRequiredError("Identificação necessária")
+        item = SchedulingService().get_mine(actor, arguments.appointment_id)
+        return RescheduleStartedResult(appointment=item)
+
+
+class RescheduleAppointmentHandler:
+    arguments_model = RescheduleAppointmentArguments
+
+    def execute(self, arguments: RescheduleAppointmentArguments, actor: Actor | None):
+        if actor is None:
+            raise AuthenticationRequiredError("Identificação necessária")
+        from app.agent.tools.models import AppointmentResult
+
+        item = SchedulingService().reschedule(actor, arguments.appointment_id, arguments.starts_at)
+        return AppointmentResult(type="appointment_rescheduled", appointment=item)
+
+
+def _catalog_tool_specs() -> tuple[ToolSpec, ...]:
     return (
         ToolSpec(
             "list_insurers",
@@ -168,6 +213,11 @@ def tool_specs() -> tuple[ToolSpec, ...]:
         ToolSpec(
             "search_knowledge", "Pesquisa conhecimento aprovado.", ToolRisk.READ, KnowledgeHandler()
         ),
+    )
+
+
+def _scheduling_tool_specs() -> tuple[ToolSpec, ...]:
+    return (
         ToolSpec(
             "list_my_appointments",
             "Lista consultas do paciente.",
@@ -194,4 +244,25 @@ def tool_specs() -> tuple[ToolSpec, ...]:
             True,
             audit=True,
         ),
+        ToolSpec(
+            "start_reschedule",
+            "Inicia o reagendamento de uma consulta do paciente.",
+            ToolRisk.SENSITIVE,
+            StartRescheduleHandler(),
+            True,
+            audit=True,
+        ),
+        ToolSpec(
+            "reschedule_appointment",
+            "Altera a data e o horário de uma consulta.",
+            ToolRisk.WRITE,
+            RescheduleAppointmentHandler(),
+            True,
+            True,
+            audit=True,
+        ),
     )
+
+
+def tool_specs() -> tuple[ToolSpec, ...]:
+    return (*_catalog_tool_specs(), *_scheduling_tool_specs())
