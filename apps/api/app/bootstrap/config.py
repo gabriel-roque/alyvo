@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     llm_routing_enabled: bool = False
     llm_response_enabled: bool = True
     llm_response_max_tokens: int = 260
+    contextual_intelligence_enabled: bool = True
+    contextual_intelligence_shadow_mode: bool = False
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""
     langsmith_project: str = "alyvo"

@@ -140,3 +140,43 @@ def test_directory_composition_cannot_drop_a_compound_answer_obligation():
     result = composer.compose(request(draft=draft, tool_result=tool_result))
 
     assert result["answer"] == draft["answer"]
+
+
+def test_availability_composition_cannot_hide_a_returned_doctor():
+    draft = {
+        "answer": "Há horários disponíveis. Qual opção você prefere?",
+        "intent": "search_availability",
+        "citations": [],
+    }
+    tool_result = {
+        "type": "availability",
+        "items": [
+            {"doctor": {"name": "Dra. Marina Costa"}},
+            {"doctor": {"name": "Dr. Paulo Lima"}},
+        ],
+    }
+    composer = LlmResponseComposer(
+        FakeGenerator("Encontrei horários com a Dra. Marina Costa."),
+        "Clínica Alyvo",
+    )
+
+    result = composer.compose(request(draft=draft, tool_result=tool_result))
+
+    assert result["answer"] == draft["answer"]
+
+
+def test_availability_composition_cannot_invent_slots_for_an_empty_result():
+    draft = {
+        "answer": "Não encontrei horários disponíveis para essa data.",
+        "intent": "search_availability",
+        "citations": [],
+    }
+    tool_result = {"type": "availability", "items": []}
+    composer = LlmResponseComposer(
+        FakeGenerator("Há um horário disponível às 9h."),
+        "Clínica Alyvo",
+    )
+
+    result = composer.compose(request(draft=draft, tool_result=tool_result))
+
+    assert result["answer"] == draft["answer"]

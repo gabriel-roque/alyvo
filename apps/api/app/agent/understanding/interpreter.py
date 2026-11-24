@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from app.agent.conversation import ConversationContext, ConversationTurn
-from app.agent.routing import Domain, RouteDecision, RuleChain, Topic
+from app.agent.routing import Domain, RouteDecision, RouteSource, RuleChain, Topic
 from app.agent.routing.context import resolve_from_context
 from app.agent.routing.rules import normalize
 from app.agent.understanding.models import AnswerRequirement, TurnUnderstanding
+from app.bootstrap.config import get_settings
+from app.shared.infrastructure.observability import record
 
 SemanticInterpreter = Callable[[str, tuple[ConversationTurn, ...]], TurnUnderstanding | None]
 
@@ -33,13 +35,31 @@ class TurnInterpreter:
         context: ConversationContext,
         history: tuple[ConversationTurn, ...] = (),
     ) -> TurnUnderstanding:
-        guarded_route = resolve_from_context(self.rules.classify(message), message, context)
+        base_route = self.rules.classify(message)
+        contextual_route = resolve_from_context(base_route, message, context)
+        settings = get_settings()
+        if settings.contextual_intelligence_shadow_mode and contextual_route != base_route:
+            record(
+                "agent.context_shadow",
+                base_domain=base_route.domain,
+                base_action=base_route.action,
+                base_topic=base_route.topic,
+                contextual_domain=contextual_route.domain,
+                contextual_action=contextual_route.action,
+                contextual_topic=contextual_route.topic,
+                contextual_reason=contextual_route.reason,
+            )
+        guarded_route = contextual_route if settings.contextual_intelligence_enabled else base_route
         if guarded_route.domain in {Domain.SECURITY, Domain.CLINICAL_SAFETY}:
             return TurnUnderstanding(route=guarded_route)
 
         semantic = self._semantic(message, history)
         route = guarded_route
-        if semantic is not None and semantic.route.confidence >= 0.7:
+        if (
+            guarded_route.source != RouteSource.CONTEXT
+            and semantic is not None
+            and semantic.route.confidence >= 0.7
+        ):
             route = semantic.route.model_copy(
                 update={
                     "conversation_marker": guarded_route.conversation_marker

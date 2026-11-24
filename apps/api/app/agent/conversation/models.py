@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
-from typing import Literal
+from datetime import date, datetime, timedelta, timezone
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -61,6 +61,60 @@ class DirectoryContext(BaseModel):
     specialties: list[str] = Field(default_factory=list, max_length=20)
 
 
+class DirectoryFollowUp(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["directory_follow_up"] = "directory_follow_up"
+    doctor_ids: list[str] = Field(default_factory=list, min_length=1, max_length=20)
+
+
+class AvailabilityDateQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["availability_date"] = "availability_date"
+
+
+class SlotChoiceQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["slot_choice"] = "slot_choice"
+
+
+PendingQuestion = Annotated[
+    DirectoryFollowUp | AvailabilityDateQuestion | SlotChoiceQuestion,
+    Field(discriminator="kind"),
+]
+
+
+class PresentedSlot(BaseModel):
+    """A bounded, non-sensitive reference to an availability option shown to the user."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    position: int = Field(ge=1, le=20)
+    slot_id: str
+    doctor_id: str
+    doctor_name: str
+    unit_id: str
+    unit_name: str
+    starts_at: datetime
+    ends_at: datetime
+    timezone: str
+
+
+class PresentedAvailability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slots: list[PresentedSlot] = Field(default_factory=list, max_length=20)
+    expires_at: datetime | None = None
+
+    def is_expired(self, now: datetime | None = None) -> bool:
+        if self.expires_at is None:
+            return False
+        reference = now or datetime.now(timezone.utc)
+        return reference >= self.expires_at
+
+
 class PendingReschedule(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -76,6 +130,8 @@ class ConversationContext(BaseModel):
     active_topic: Topic | None = None
     availability: AvailabilitySlots = Field(default_factory=AvailabilitySlots)
     directory: DirectoryContext = Field(default_factory=DirectoryContext)
+    pending_question: PendingQuestion | None = None
+    presented_availability: PresentedAvailability = Field(default_factory=PresentedAvailability)
     pending_reschedule: PendingReschedule | None = None
     last_tool: str | None = None
     turn_count: int = Field(default=0, ge=0)
@@ -97,6 +153,7 @@ class ConversationContext(BaseModel):
     def with_directory_result(
         self, query: str, doctor_ids: list[str], specialties: list[str]
     ) -> ConversationContext:
+        pending = DirectoryFollowUp(doctor_ids=doctor_ids) if doctor_ids else None
         return self.model_copy(
             update={
                 "active_topic": Topic.DOCTOR,
@@ -105,6 +162,25 @@ class ConversationContext(BaseModel):
                     doctor_ids=doctor_ids[:20],
                     specialties=list(dict.fromkeys(specialties))[:20],
                 ),
+                "pending_question": pending,
+            }
+        )
+
+    def with_pending_question(self, question: PendingQuestion | None) -> ConversationContext:
+        return self.model_copy(update={"pending_question": question})
+
+    def with_presented_availability(
+        self, slots: list[PresentedSlot], now: datetime | None = None
+    ) -> ConversationContext:
+        reference = now or datetime.now(timezone.utc)
+        return self.model_copy(
+            update={
+                "active_topic": Topic.AVAILABILITY,
+                "presented_availability": PresentedAvailability(
+                    slots=slots[:20],
+                    expires_at=reference + timedelta(minutes=30) if slots else None,
+                ),
+                "pending_question": SlotChoiceQuestion() if slots else None,
             }
         )
 
@@ -113,6 +189,8 @@ class ConversationContext(BaseModel):
             update={
                 "active_topic": Topic.AVAILABILITY,
                 "availability": AvailabilitySlots(),
+                "pending_question": None,
+                "presented_availability": PresentedAvailability(),
                 "pending_reschedule": PendingReschedule(
                     appointment_id=appointment_id,
                     doctor_id=doctor_id,
@@ -121,10 +199,26 @@ class ConversationContext(BaseModel):
         )
 
     def complete_reschedule(self) -> ConversationContext:
-        return self.model_copy(update={"pending_reschedule": None, "active_topic": None})
+        return self.model_copy(
+            update={
+                "pending_reschedule": None,
+                "active_topic": None,
+                "pending_question": None,
+                "presented_availability": PresentedAvailability(),
+            }
+        )
+
+    def complete_appointment(self) -> ConversationContext:
+        return self.model_copy(
+            update={
+                "active_topic": None,
+                "pending_question": None,
+                "presented_availability": PresentedAvailability(),
+            }
+        )
 
     def clear_topic(self) -> ConversationContext:
-        return self.model_copy(update={"active_topic": None})
+        return self.model_copy(update={"active_topic": None, "pending_question": None})
 
 
 class ConversationTurn(BaseModel):

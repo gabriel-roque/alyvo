@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -82,7 +83,8 @@ class SafetyRule:
                 Domain.SECURITY, Action.REJECT, Topic.UNAUTHORIZED, risk=RiskLevel.SENSITIVE
             )
         urgent = ("dor no peito", "nao consigo respirar", "hemorragia", "convulsao", "emergencia")
-        if any(term in text for term in urgent):
+        chest_pain = re.search(r"\bdor\b(?:\s+\w+){0,3}\s+\bpeito\b", text)
+        if any(term in text for term in urgent) or chest_pain:
             return decision(
                 Domain.CLINICAL_SAFETY, Action.REJECT, Topic.CLINICAL, risk=RiskLevel.URGENT
             )
@@ -253,6 +255,9 @@ class KnowledgeRule:
             "cancelamento",
             "preparo",
             "documento",
+            "resultado",
+            "estacionamento",
+            "acompanhante",
             "atendimento",
             "funcionamento",
             "lgpd",

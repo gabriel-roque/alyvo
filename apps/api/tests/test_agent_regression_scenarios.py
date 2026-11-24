@@ -32,20 +32,26 @@ def test_conversation_regression_scenarios_through_public_api(client, case):
     assert response is not None
     payload = response.json()
     assert payload["intent"] == case["expected_intent"], case["id"]
-    assert payload["tool_result"]["type"] == case["expected_result_type"], case["id"]
+    expected_result_type = case.get("expected_result_type")
+    if expected_result_type is not None:
+        assert payload["tool_result"]["type"] == expected_result_type, case["id"]
+    if "expected_auth_required" in case:
+        assert payload["auth_required"] is case["expected_auth_required"], case["id"]
+    if expected_pending_tool := case.get("expected_pending_tool"):
+        assert payload["pending_tool"]["name"] == expected_pending_tool, case["id"]
 
     evidence = _normalized(
         " ".join(
             (
                 payload["answer"],
-                json.dumps(payload["tool_result"], ensure_ascii=False),
+                json.dumps(payload.get("tool_result"), ensure_ascii=False),
                 json.dumps(payload["citations"], ensure_ascii=False),
             )
         )
     )
-    for fact in case["expected_facts"]:
+    for fact in case.get("expected_facts", []):
         assert _normalized(fact) in evidence, (case["id"], fact, payload)
-    for forbidden in case["forbidden_facts"]:
+    for forbidden in case.get("forbidden_facts", []):
         assert _normalized(forbidden) not in _normalized(payload["answer"]), (
             case["id"],
             forbidden,

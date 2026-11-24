@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.agent.routing.rules import normalize
 from app.agent.tools.models import ToolResult
@@ -70,6 +71,22 @@ def _present_availability(name: str, payload: dict[str, Any]) -> dict[str, Any]:
     day = _human_date(date.fromisoformat(payload["requested_from"]))
     period = _period_label(payload.get("period"))
     if not payload["items"]:
+        alternative_dates = _availability_dates(payload.get("alternatives", []))
+        if alternative_dates:
+            labels = ", ".join(_human_date(value) for value in alternative_dates[:3])
+            return response(
+                f"Não encontrei horários disponíveis para {day}{period}. "
+                f"As próximas disponibilidades são {labels}.",
+                name,
+                tool_result=payload,
+                suggestions=[
+                    {
+                        "label": value.strftime("%d/%m"),
+                        "message": f"Quero horários em {value:%d/%m/%Y}",
+                    }
+                    for value in alternative_dates[:3]
+                ],
+            )
         return response(
             f"Não encontrei horários disponíveis para {day}{period}. Quer tentar outro dia?",
             name,
@@ -82,6 +99,23 @@ def _present_availability(name: str, payload: dict[str, Any]) -> dict[str, Any]:
                 },
             ],
         )
+    requested_to = date.fromisoformat(payload["requested_to"])
+    requested_from = date.fromisoformat(payload["requested_from"])
+    if requested_to != requested_from:
+        available_dates = _availability_dates(payload["items"])
+        labels = ", ".join(_human_date(value) for value in available_dates[:5])
+        return response(
+            f"Encontrei horários disponíveis em {labels}. Qual dia você prefere?",
+            name,
+            tool_result=payload,
+            suggestions=[
+                {
+                    "label": value.strftime("%d/%m"),
+                    "message": f"Quero horários em {value:%d/%m/%Y}",
+                }
+                for value in available_dates[:5]
+            ],
+        )
     shown = len(payload["items"])
     suffix = "" if payload["total"] == shown else f" Mostrei as {shown} primeiras opções."
     operation = "remarcar" if payload.get("reschedule_appointment_id") else "agendar"
@@ -90,6 +124,19 @@ def _present_availability(name: str, payload: dict[str, Any]) -> dict[str, Any]:
         name,
         tool_result=payload,
     )
+
+
+def _availability_dates(items: list[dict[str, Any]]) -> list[date]:
+    values: list[date] = []
+    for item in items:
+        starts_at = item.get("starts_at")
+        timezone = item.get("timezone")
+        if not isinstance(starts_at, str) or not isinstance(timezone, str):
+            continue
+        value = datetime.fromisoformat(starts_at).astimezone(ZoneInfo(timezone)).date()
+        if value not in values:
+            values.append(value)
+    return values
 
 
 def _present_standard(

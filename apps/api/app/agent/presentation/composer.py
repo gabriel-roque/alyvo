@@ -39,7 +39,14 @@ class LlmResponseComposer:
     """Lets the LLM phrase an answer without delegating execution authority to it."""
 
     _LOCKED_DOMAINS = {"security", "clinical_safety"}
-    _FORBIDDEN_OUTPUT = ("fontes consultadas", "tool_result", "```json", "system prompt")
+    _FORBIDDEN_OUTPUT = (
+        "fontes consultadas",
+        "tool result",
+        "json",
+        "system prompt",
+        "ignore suas regras",
+        "desconsidere instrucoes",
+    )
 
     def __init__(
         self,
@@ -54,6 +61,12 @@ class LlmResponseComposer:
     def compose(self, request: CompositionRequest) -> JsonObject:
         fallback = self._fallback.compose(request)
         if request.domain in self._LOCKED_DOMAINS:
+            return fallback
+        if (
+            request.tool_result
+            and request.tool_result.get("type") == "availability"
+            and not request.tool_result.get("items")
+        ):
             return fallback
         raw_citations = fallback.get("citations", [])
         citations = raw_citations if isinstance(raw_citations, list) else []
@@ -79,14 +92,17 @@ class LlmResponseComposer:
     def _valid(self, answer: str | None) -> bool:
         if not answer or len(answer.strip()) > 2_000:
             return False
-        normalized = answer.casefold()
-        return not any(term in normalized for term in self._FORBIDDEN_OUTPUT)
+        normalized = normalize(answer)
+        return not any(normalize(term) in normalized for term in self._FORBIDDEN_OUTPUT)
 
     @staticmethod
     def _preserves_required_facts(answer: str | None, request: CompositionRequest) -> bool:
         if answer is None or not request.tool_result:
             return True
-        if request.tool_result.get("type") != "directory":
+        result_type = request.tool_result.get("type")
+        if result_type == "availability":
+            return _preserves_availability_facts(answer, request.tool_result)
+        if result_type != "directory":
             return True
         items = request.tool_result.get("items")
         if not isinstance(items, list):
@@ -112,3 +128,23 @@ class LlmResponseComposer:
         if isinstance(total, int) and f"temos {total} " in draft:
             required.add(str(total))
         return all(fact in generated for fact in required)
+
+
+def _preserves_availability_facts(answer: str, tool_result: JsonObject) -> bool:
+    generated = normalize(answer)
+    items = tool_result.get("items")
+    if not isinstance(items, list):
+        return False
+    if not items:
+        return "nao" in generated and "horario" in generated
+    if "nao ha horario" in generated or "nao encontrei horario" in generated:
+        return False
+    names = {
+        normalize(name)
+        for item in items
+        if isinstance(item, dict)
+        and isinstance(item.get("doctor"), dict)
+        and isinstance(name := item["doctor"].get("name"), str)
+    }
+    mentioned = {name for name in names if name in generated}
+    return not mentioned or mentioned == names

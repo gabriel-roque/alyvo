@@ -1,0 +1,6 @@
+{"id":"rag-hours-supported","question":"Qual é o horário de funcionamento da clínica?","supported":true,"expected_facts":["segunda a sexta","8h","18h"]}
+{"id":"rag-exam-documents-supported","question":"Quais documentos devo levar para realizar exames?","supported":true,"expected_facts":["documento de identificação com foto","pedido médico","carteirinha"]}
+{"id":"rag-result-deadline-supported","question":"Em quanto tempo fica pronto o resultado do hemograma?","supported":true,"expected_facts":["dois dias úteis"]}
+{"id":"rag-weekend-supported","question":"A clínica atende aos finais de semana?","supported":true,"expected_facts":["segunda a sexta"]}
+{"id":"rag-parking-unsupported","question":"A clínica possui estacionamento gratuito?","supported":false,"expected_facts":[]}
+{"id":"rag-companion-unsupported","question":"Posso levar acompanhante para a consulta?","supported":false,"expected_facts":[]}

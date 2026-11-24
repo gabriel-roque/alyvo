@@ -253,4 +253,6 @@ class ConversationService:
             return context.with_pending_reschedule(appointment.id, appointment.doctor_id)
         if isinstance(result, AppointmentResult) and result.type == "appointment_rescheduled":
             return context.complete_reschedule()
+        if isinstance(result, AppointmentResult) and result.type == "appointment_created":
+            return context.complete_appointment()
         return context

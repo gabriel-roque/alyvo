@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -155,7 +156,7 @@ class KnowledgeService:
             confidence = min(0.97, 0.72 + (selected[0].score * 0.2)) if selected else 0.12
             answerability = (
                 Answerability.SUPPORTED
-                if selected and selected[0].score >= 0.35
+                if selected and selected[0].score >= 0.3
                 else Answerability.INSUFFICIENT
             )
             return RetrievalResult(selected, confidence, "lexical-sql", answerability)
@@ -183,11 +184,54 @@ class KnowledgeService:
 
     @staticmethod
     def _terms(value: str) -> set[str]:
-        stop = {"para", "com", "uma", "que", "qual", "quais", "dos", "das", "por", "voces"}
-        normalized = "".join(
-            character.lower() if character.isalnum() else " " for character in value
+        stop = {
+            "para",
+            "com",
+            "uma",
+            "que",
+            "qual",
+            "quais",
+            "dos",
+            "das",
+            "aos",
+            "por",
+            "voces",
+            "clinica",
+            "quanto",
+            "tempo",
+            "fica",
+            "possui",
+            "possuir",
+            "tem",
+            "existe",
+            "finais",
+            "final",
+            "fim",
+            "semana",
+        }
+        decomposed = unicodedata.normalize("NFKD", value.casefold())
+        plain = "".join(
+            character for character in decomposed if not unicodedata.combining(character)
         )
-        return {token for token in normalized.split() if len(token) >= 3 and token not in stop}
+        normalized = "".join(character if character.isalnum() else " " for character in plain)
+        aliases = {
+            "abre": "funcionamento",
+            "abertura": "funcionamento",
+            "atende": "funcionamento",
+            "atendimento": "funcionamento",
+            "fecha": "funcionamento",
+            "horario": "funcionamento",
+            "horarios": "funcionamento",
+            "pronto": "resultado",
+            "resultados": "resultado",
+        }
+        terms: set[str] = set()
+        for token in normalized.split():
+            if len(token) < 3 or token in stop:
+                continue
+            singular = token[:-1] if token.endswith("s") and len(token) > 4 else token
+            terms.add(aliases.get(token, aliases.get(singular, singular)))
+        return terms
 
     @staticmethod
     def _view(item: KnowledgeDocument, sync_status: str = "not_applicable") -> dict:

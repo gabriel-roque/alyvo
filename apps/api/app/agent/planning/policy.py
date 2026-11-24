@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.agent.conversation import AvailabilitySlots, ConversationContext
-from app.agent.orchestration.dates import extract_availability_slots
+from app.agent.conversation import ConversationContext
 from app.agent.planning.capabilities import CapabilityRegistry
 from app.agent.planning.models import ExecutionPlan, PlanKind, PlanStep
+from app.agent.planning.scheduling import (
+    build_appointment_selection_plan,
+    build_availability_plan,
+)
 from app.agent.presentation import response
 from app.agent.routing import Action, Domain, RiskLevel, RouteDecision, Topic
 from app.agent.routing.rules import normalize
-from app.modules.catalog.application import CatalogService
 
 
 class DecisionPolicy:
@@ -27,72 +29,21 @@ class DecisionPolicy:
     ) -> ExecutionPlan:
         direct = self._direct_response(route, message)
         if direct is not None:
-            next_context = context if route.domain == Domain.CONVERSATION else context.clear_topic()
+            keep_context = (
+                route.domain == Domain.CONVERSATION and route.reason != "declined pending question"
+            )
+            next_context = context if keep_context else context.clear_topic()
             return ExecutionPlan(
                 kind=self._direct_kind(route),
                 response=direct,
                 reason_codes=[f"direct:{route.domain}:{route.action}"],
                 context=next_context,
             )
+        if route.topic == Topic.AVAILABILITY and route.action == Action.CREATE:
+            return build_appointment_selection_plan(message, context)
         if route.topic == Topic.AVAILABILITY:
-            return self._availability_plan(message, context, today)
+            return build_availability_plan(message, context, today)
         return self._tool_or_rag_plan(route, message, context)
-
-    def _availability_plan(
-        self, message: str, context: ConversationContext, today: date
-    ) -> ExecutionPlan:
-        text = normalize(message)
-        if any(term in text for term in ("outro dia", "outra data")):
-            context = context.model_copy(update={"availability": AvailabilitySlots()})
-        extracted = extract_availability_slots(message, today)
-        entities = CatalogService().resolve_doctor_entities(message)
-        extracted = extracted.model_copy(
-            update={
-                "doctor_id": _single(entities["doctor_ids"]),
-                "specialty_id": _single(entities["specialty_ids"]),
-                "unit_id": _single(entities["unit_ids"]),
-                "insurer_id": _single(entities["insurer_ids"]),
-            }
-        )
-        updated = context.with_availability(extracted)
-        if updated.availability.from_date is None:
-            return ExecutionPlan(
-                kind=PlanKind.CLARIFICATION,
-                response=response(
-                    "Claro! Para qual dia você gostaria de consultar os horários?",
-                    "clarify_availability",
-                    suggestions=[
-                        {"label": "Amanhã", "message": "Quero horários para amanhã"},
-                        {
-                            "label": "Próxima sexta-feira",
-                            "message": "Quero horários na próxima sexta-feira",
-                        },
-                    ],
-                ),
-                reason_codes=["missing_slot:availability.date"],
-                context=updated,
-            )
-        arguments: dict[str, object] = {
-            key: value for key, value in updated.availability.tool_arguments().items()
-        }
-        if pending := updated.pending_reschedule:
-            arguments.update(
-                {
-                    "doctor_id": pending.doctor_id,
-                    "reschedule_appointment_id": pending.appointment_id,
-                }
-            )
-        return ExecutionPlan(
-            kind=PlanKind.TOOL,
-            steps=[
-                PlanStep(
-                    tool_name="search_availability",
-                    arguments=arguments,
-                )
-            ],
-            reason_codes=["authoritative_data:scheduling"],
-            context=updated.with_tool("search_availability"),
-        )
 
     def _tool_or_rag_plan(
         self, route: RouteDecision, message: str, context: ConversationContext
@@ -192,7 +143,3 @@ def _greeting(message: str) -> str:
     if "boa noite" in text:
         return f"Boa noite!{social} Como posso ajudar você?"
     return f"Oi!{social or ' Que bom falar com você.'} Como posso ajudar hoje?"
-
-
-def _single(values: list[str]) -> str | None:
-    return values[0] if len(values) == 1 else None

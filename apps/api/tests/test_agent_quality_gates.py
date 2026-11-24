@@ -5,7 +5,9 @@ from app.agent.conversation import ConversationContext
 from app.agent.routing import Action, Domain, RouteDecision, RouteSource, RuleChain, Topic
 from app.agent.tools import ToolGate, ToolInvocationPolicy, ToolRegistry, build_tool_registry
 from app.agent.understanding import TurnInterpreter, TurnUnderstanding
+from app.infrastructure.providers import _qualified_semantic_score
 from app.modules.identity.domain import Actor, UserRole
+from app.modules.knowledge.application.service import KnowledgeService
 
 
 def test_deterministic_route_never_calls_semantic_fallback():
@@ -74,6 +76,8 @@ def test_conversation_context_discards_sensitive_unknown_fields():
         "active_topic",
         "availability",
         "directory",
+        "pending_question",
+        "presented_availability",
         "pending_reschedule",
         "last_tool",
         "turn_count",
@@ -109,3 +113,18 @@ def test_tool_policy_enforces_authentication_and_confirmation():
     )
     assert policy.evaluate(registry.get("start_reschedule"), actor) == ToolGate.EXECUTE
     assert policy.evaluate(registry.get("reschedule_appointment"), actor) == ToolGate.CONFIRM
+
+
+def test_semantic_rag_requires_lexical_support_unless_similarity_is_very_high():
+    assert _qualified_semantic_score(0.78, 0.25, 0.76) == 0
+    assert _qualified_semantic_score(0.78, 0.5, 0.76) == 0
+    assert _qualified_semantic_score(0.78, 0.75, 0.76) == 0.78
+    assert _qualified_semantic_score(0.93, 0, 0.76) == 0.93
+
+
+def test_lexical_rag_ignores_generic_possession_and_weekend_words():
+    assert KnowledgeService._terms("A clínica possui estacionamento gratuito?") == {
+        "estacionamento",
+        "gratuito",
+    }
+    assert KnowledgeService._terms("A clínica atende aos finais de semana?") == {"funcionamento"}

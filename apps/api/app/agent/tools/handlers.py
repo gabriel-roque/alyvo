@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.agent.presentation.knowledge import relevant_excerpt
+from app.agent.presentation.knowledge import is_safe_evidence, relevant_excerpt
 from app.agent.tools.models import (
     AppointmentsResult,
     AvailabilityArguments,
@@ -62,21 +62,36 @@ class AvailabilityHandler:
     arguments_model = AvailabilityArguments
 
     def execute(self, arguments: AvailabilityArguments, actor: Actor | None):
-        result = SchedulingService().availability(
+        service = SchedulingService()
+        requested_to = arguments.to_date or arguments.from_date
+        result = service.availability(
             arguments.from_date,
-            arguments.to_date or arguments.from_date + timedelta(days=14),
+            requested_to,
             arguments.doctor_id,
             arguments.specialty_id,
             arguments.unit_id,
             arguments.insurer_id,
             arguments.period,
         )
+        alternatives: list[dict] = []
+        if not result["items"] and requested_to == arguments.from_date:
+            alternative_result = service.availability(
+                arguments.from_date + timedelta(days=1),
+                arguments.from_date + timedelta(days=14),
+                arguments.doctor_id,
+                arguments.specialty_id,
+                arguments.unit_id,
+                arguments.insurer_id,
+                arguments.period,
+            )
+            alternatives = alternative_result["items"][:8]
         return AvailabilityResult(
             items=result["items"][:8],
+            alternatives=alternatives,
             total=result["total"],
             timezone=result["timezone"],
             requested_from=arguments.from_date,
-            requested_to=arguments.to_date or arguments.from_date,
+            requested_to=requested_to,
             period=arguments.period,
             reschedule_appointment_id=arguments.reschedule_appointment_id,
         )
@@ -104,12 +119,16 @@ class KnowledgeHandler:
             if source_key in seen_sources:
                 continue
             excerpt = relevant_excerpt(arguments.query, item.content)
-            if excerpt:
+            if excerpt and is_safe_evidence(excerpt):
                 citations.append({"title": item.title, "source": item.source, "excerpt": excerpt})
                 seen_sources.add(source_key)
             if len(citations) == 3:
                 break
-        confidence = result.confidence if result.answerability == Answerability.SUPPORTED else 0
+        confidence = (
+            result.confidence
+            if result.answerability == Answerability.SUPPORTED and citations
+            else 0
+        )
         return KnowledgeResult(query=arguments.query, citations=citations, confidence=confidence)
 
 

@@ -142,6 +142,7 @@ class DirectoryResult(ToolResultBase):
 class AvailabilityResult(ToolResultBase):
     type: Literal["availability"] = "availability"
     items: list[AvailabilityItem]
+    alternatives: list[AvailabilityItem] = Field(default_factory=list)
     total: int
     timezone: str | None = None
     requested_from: date

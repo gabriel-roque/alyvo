@@ -64,6 +64,25 @@ def relevant_excerpt(question: str, content: str, limit: int = 420) -> str:
     return excerpt[:limit].rstrip()
 
 
+def is_safe_evidence(content: str) -> bool:
+    normalized = " ".join(_terms_for_safety(content))
+    forbidden = (
+        "ignore suas regras",
+        "ignore instrucoes anteriores",
+        "desconsidere instrucoes",
+        "system prompt",
+        "execute a ferramenta",
+        "chame a ferramenta",
+    )
+    return not any(term in normalized for term in forbidden)
+
+
+def _terms_for_safety(value: str) -> list[str]:
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    plain = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.findall(r"[a-z0-9]+", plain)
+
+
 def _segments(content: str) -> list[str]:
     normalized = normalize_extracted_text(content)
     normalized = re.sub(r"(?<=\w)-\s*\n\s*(?=\w)", "", normalized)

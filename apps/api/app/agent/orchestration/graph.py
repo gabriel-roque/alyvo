@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from langgraph.graph import END, START, StateGraph
 
-from app.agent.conversation import ConversationContext, ConversationTurn
+from app.agent.conversation import ConversationContext, ConversationTurn, PresentedSlot
 from app.agent.planning import DecisionPolicy, ExecutionPlan
 from app.agent.presentation import (
     CompositionRequest,
@@ -20,7 +20,7 @@ from app.agent.presentation.enrichment import post_appointment_guidance
 from app.agent.routing import ConversationMarker, Domain, RouteDecision, RuleChain
 from app.agent.routing.rules import normalize
 from app.agent.tools import ToolGate, ToolInvocationPolicy, ToolRegistry, build_tool_registry
-from app.agent.tools.models import AppointmentResult, ToolResult
+from app.agent.tools.models import AppointmentResult, AvailabilityResult, ToolResult
 from app.agent.understanding import AnswerRequirement, TurnInterpreter, TurnUnderstanding
 from app.bootstrap.config import get_settings
 from app.modules.identity.domain import Actor
@@ -122,6 +122,19 @@ class AgentOrchestrator:
             answer_requirements=list(understanding.requirements),
             refers_to_previous_result=understanding.refers_to_previous_result,
             correction=understanding.correction,
+            pending_before=(
+                initial_context.pending_question.kind
+                if initial_context.pending_question is not None
+                else None
+            ),
+            pending_after=(
+                outcome.context.pending_question.kind
+                if outcome.context.pending_question is not None
+                else None
+            ),
+            has_selected_doctor=bool(outcome.context.availability.doctor_id),
+            has_selected_date=bool(outcome.context.availability.from_date),
+            presented_slot_count=len(outcome.context.presented_availability.slots),
             duration_ms=round((time.perf_counter() - started) * 1000, 1),
         )
         return outcome
@@ -188,6 +201,25 @@ class AgentOrchestrator:
                 [item.id for item in result.items],
                 [item.specialty for item in result.items],
             )
+        elif isinstance(result, AvailabilityResult):
+            update["context"] = state["context"].with_presented_availability(
+                [
+                    PresentedSlot(
+                        position=index,
+                        slot_id=item.id,
+                        doctor_id=item.doctor.id,
+                        doctor_name=item.doctor.name,
+                        unit_id=item.unit.id,
+                        unit_name=item.unit.name,
+                        starts_at=item.starts_at,
+                        ends_at=item.ends_at,
+                        timezone=item.timezone,
+                    )
+                    for index, item in enumerate(result.items, start=1)
+                ]
+            )
+        elif isinstance(result, AppointmentResult) and result.type == "appointment_created":
+            update["context"] = state["context"].complete_appointment()
         return update
 
     @staticmethod
