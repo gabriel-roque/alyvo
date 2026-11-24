@@ -20,7 +20,9 @@ from app.shared.infrastructure.models import (
 )
 from app.shared.infrastructure.uow import uow_factory
 
-MODELS = {
+CatalogModel = type[Specialty] | type[Unit] | type[Insurer] | type[Exam]
+
+MODELS: dict[CatalogKind, CatalogModel] = {
     CatalogKind.SPECIALTY: Specialty,
     CatalogKind.UNIT: Unit,
     CatalogKind.INSURER: Insurer,

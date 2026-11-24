@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from app.agent.conversation import ConversationTurn
 from app.agent.presentation import CompositionRequest, LlmResponseComposer
+from app.infrastructure.llm import _ollama_keep_alive
 
 
 @dataclass
@@ -14,6 +15,11 @@ class FakeGenerator:
     def generate(self, system: str, prompt: str) -> str | None:
         self.calls.append((system, prompt))
         return self.answer
+
+
+def test_ollama_forever_keep_alive_uses_api_sentinel():
+    assert _ollama_keep_alive("-1") == -1
+    assert _ollama_keep_alive("10m") == "10m"
 
 
 def request(**changes: object) -> CompositionRequest:

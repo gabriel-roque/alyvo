@@ -1,4 +1,5 @@
 import { ArrowRight, MessageCircle, ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { Brand } from "@/components/brand";
 
@@ -30,7 +31,15 @@ export default function Home() {
         <div className="landing-art" aria-hidden="true">
           <span className="art-orbit art-one"><MessageCircle /></span>
           <span className="art-orbit art-two"><ShieldCheck /></span>
-          <div className="art-core"><strong>A</strong><small>assistência<br />administrativa</small></div>
+          <Image
+            className="landing-illustration"
+            src="/alyvo-hero-clinician.png"
+            alt=""
+            width={1392}
+            height={1130}
+            sizes="(max-width: 900px) 82vw, 45vw"
+            priority
+          />
         </div>
       </section>
     </main>

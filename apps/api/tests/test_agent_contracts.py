@@ -149,6 +149,13 @@ def test_doctor_request_wins_over_generic_insurer_listing():
     assert Topic.INSURER in decision.secondary_topics
 
 
+def test_exam_guidance_is_routed_to_approved_knowledge():
+    decision = RuleChain().classify("Quais documentos devo levar para exames?")
+
+    assert decision.domain == Domain.KNOWLEDGE
+    assert decision.topic == Topic.INSTITUTIONAL
+
+
 def test_compound_turn_keeps_every_answer_requirement():
     understanding = TurnInterpreter(RuleChain()).understand(
         "Atendem cardiologia? Quais médicos e quais planos eles aceitam?",

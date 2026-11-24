@@ -129,10 +129,16 @@ def _ollama_model(settings: Settings, temperature: float) -> Any:
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,
         temperature=temperature,
-        keep_alive=settings.ollama_keep_alive,
+        keep_alive=_ollama_keep_alive(settings.ollama_keep_alive),
         num_ctx=settings.ollama_context_length,
         num_predict=settings.llm_response_max_tokens,
     )
+
+
+def _ollama_keep_alive(value: str) -> str | int:
+    # Recent Ollama releases reject the string "-1" as a duration without a
+    # unit, but still accept the integer -1 sentinel for keeping a model loaded.
+    return -1 if value.strip() == "-1" else value
 
 
 @lru_cache

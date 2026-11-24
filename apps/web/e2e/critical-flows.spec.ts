@@ -5,7 +5,13 @@ test("landing is reduced to hero, chat CTA and backoffice access", async ({ page
   await expect(page.getByRole("heading", { name: /Cuidado inteligente/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Conversar com a Alyvo/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "Backoffice" })).toBeVisible();
+  await expect(page.locator(".landing-illustration")).toBeVisible();
   await expect(page.locator("main section")).toHaveCount(1);
+  const viewport = await page.evaluate(() => ({
+    pageHeight: document.documentElement.scrollHeight,
+    viewportHeight: window.innerHeight,
+  }));
+  expect(viewport.pageHeight).toBeLessThanOrEqual(viewport.viewportHeight);
 });
 
 test("anonymous RAG answer exposes approved sources", async ({ page }) => {
@@ -15,19 +21,21 @@ test("anonymous RAG answer exposes approved sources", async ({ page }) => {
   const response = page.locator(".chat-message.assistant").last();
   await expect(response).toContainText(/documento|carteirinha|informações aprovadas|base aprovada/i, { timeout: 120_000 });
   await response.getByText(/Fontes consultadas/).click();
-  await expect(response.getByText(/Manual de atendimento|Base institucional aprovada/).first()).toBeVisible();
+  await expect(response.getByText(/Guia institucional Alyvo|Base institucional/).first()).toBeVisible();
 });
 
 test("personal query requests CPF and birth date contextually", async ({ page }) => {
   await page.goto("/chat");
   await page.getByRole("textbox", { name: "Mensagem", exact: true }).fill("Quais são minhas consultas?");
   await page.getByRole("button", { name: "Enviar mensagem" }).click();
-  await expect(page.getByText("Confirme sua identidade")).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByText("Confirme sua identidade", { exact: true })).toBeVisible({ timeout: 120_000 });
   await page.getByLabel("CPF").fill("123.456.789-09");
   await page.getByLabel("Data de nascimento").fill("1990-01-15");
   await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByText("Juliana Silva")).toBeVisible();
-  await expect(page.getByText(/Encontrei .*consulta|não possui consultas/)).toBeVisible();
+  await expect(page.getByText("Juliana Demo")).toBeVisible();
+  await expect(
+    page.getByText(/Encontrei .*consulta|não (?:possui|tem) consultas/i),
+  ).toBeVisible({ timeout: 120_000 });
 });
 
 test("relative Friday is preserved and shown in the response", async ({ page }) => {

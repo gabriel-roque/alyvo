@@ -112,7 +112,7 @@ class SafetyRule:
 class ConversationRule:
     def evaluate(self, message: str) -> RouteDecision | None:
         marker, remainder = split_conversation_marker(message)
-        if is_conversation_only(marker, remainder):
+        if marker is not None and is_conversation_only(marker, remainder):
             actions = {
                 ConversationMarker.GREETING: Action.GREET,
                 ConversationMarker.THANKS: Action.THANK,
@@ -235,7 +235,11 @@ class DirectoryRule:
             return decision(Domain.DIRECTORY, Action.LIST, Topic.SPECIALTY)
         if any(term in text for term in ("unidade", "endereco", "onde fica")):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.UNIT)
-        if any(term in text for term in ("exame", "procedimento", "hemograma")):
+        exam_terms = ("exame", "procedimento", "hemograma")
+        exam_guidance_terms = ("documento", "levar", "prazo", "preparo", "resultado")
+        if any(term in text for term in exam_terms) and not any(
+            term in text for term in exam_guidance_terms
+        ):
             return decision(Domain.DIRECTORY, Action.LIST, Topic.EXAM)
         return None
 
